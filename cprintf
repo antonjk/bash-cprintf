@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Get script directory (handle symlinks)
+if [[ -L "${BASH_SOURCE[0]}" ]]; then
+   SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+else
+   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 ########################################################################################################################
 ## Colored Printf (cprintf) - Formatted output with colors and styles
 ##
@@ -167,7 +173,7 @@ __CPRINTF_ANSI_COLOR_ALIASES__['G']=15
 __CPRINTF_ANSI_COLOR_ALIASES__['H']=16
 __CPRINTF_ANSI_COLOR_ALIASES__['X']=8
 
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cprintf.colorize-2.0"
+. "$SCRIPT_DIR/cprintf.colorize-2.0"
 #-----------------------------------------------------------------------------------------------------------------------
 # Formatted output with color and style markup to stdout.
 #
@@ -218,7 +224,7 @@ if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
    fi
    case "$1" in
       --*)
-         include_file="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/cprintf.${1:2}.inc"
+         include_file="$SCRIPT_DIR/cprintf.${1:2}.inc"
          if [[ -f "${include_file}" ]]; then
             . "${include_file}"
          else
