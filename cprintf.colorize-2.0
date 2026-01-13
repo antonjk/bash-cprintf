@@ -1,0 +1,169 @@
+declare -a _current_style=(0 0 0 0 0 0 0 0 0 0 '39' '49')
+declare -a _effect_counts=(0 0 0 0 0 0 0 0 0 0)
+declare -a _fg=(0 0 0 0 0 0 0 0 0 0 '39')
+declare -a _bg=(0 0 0 0 0 0 0 0 0 0 '49')
+
+function cprintf::ansi_seq() {
+   local ansi_seq effects=0
+   for (( e = 1; e < 10; e++ )); do
+      ((_effect_counts[e] > 0 && _current_style[e] == 0)) && {
+         _current_style[e]=1
+         ansi_seq+=";$e"
+      }
+      ((effects += _current_style[e]))
+   done
+   ((effects > 0)) && _current_style[0]=0 || {
+      ((_current_style[0] == 0)) && {
+         ansi_seq=";0"
+         _current_style[1]=1
+      }
+   }
+   [[ "${_current_style[10]}" != "${_fg[-1]}" ]] && {
+      ansi_seq+=";${_fg[-1]}"
+      _current_style[10]="${_fg[-1]}"
+   }
+   [[ "${_current_style[11]}" != "${_bg[-1]}" ]] && {
+      ansi_seq+=";${_bg[-1]}"
+      _current_style[11]="${_bg[-1]}"
+   }
+   [[ -n "${ansi_seq}" ]] && printf "%b[%bm" "${ANSI_ESC}" "${ansi_seq:1}"
+}
+
+function cprintf::add_effect() {
+   ((_effect_counts[$1] += $2))
+   ((_effect_counts[$1] < 0)) && ((_effect_counts[$1] = 0))
+}
+
+function cprintf::add_color_effect() {
+   local color_plane="$1"
+   local inc=$2
+   local color_code="$3"
+
+   if [[ $inc -lt 0 ]]; then
+      if [[ "$color_plane" == "fg" && ${#_fg[@]} -gt 11 ]]; then
+         for (( i = ${#_fg[@]} - 11; i < ${#_fg[@]} - 1; i++ )); do
+            ((_effect_counts[i] -= _fg[i]))
+         done
+      elif [[ "$color_plane" == "bg" && ${#_bg[@]} -gt 11 ]]; then
+         for (( i = ${#_bg[@]} - 11; i < ${#_bg[@]} - 1; i++ )); do
+            ((_effect_counts[i] -= _bg[i]))
+         done
+      fi
+      for (( i = 0; i < 11; i++ )); do
+         unset "_${color_plane}[-1]"
+      done
+      return
+   fi
+
+   local intensity=0
+   local color=(0 0 0 0 0 0 0 0 0 0 "")
+
+   while [[ ${#color_code} -gt 1 ]]; do
+      case ${color_code: -1} in
+         \+) intensity=1 ;;
+         -) intensity=-1 ;;
+         \*) ((color[ANSI_ITALIC] = 1)) ;;
+         \!) ((color[ANSI_BOLD] = 1)) ;;
+         _) ((color[ANSI_UNDERLINE] = 1)) ;;
+         =) ((color[ANSI_STRIKETHROUGH] = 1)) ;;
+         \~) ((color[ANSI_INVERT] = 1)) ;;
+         *) break ;;
+      esac
+      color_code="${color_code:0:-1}"
+   done
+
+   if [[ "$color_code" =~ ^[0-9]+$ ]]; then
+      ansi_code="$color_code"
+   else
+      ansi_code="${__CPRINTF_ANSI_COLOR_ALIASES__[${color_code}]}"
+      # Preprocess
+      if [[ ${ansi_code} -lt 9 ]]; then
+         color_space="STANDARD"
+         if ((intensity > 0)); then
+            color_space="HIGH"
+            ansi_code=$((ansi_code + 9))
+         elif ((intensity < 0)); then
+            color[ANSI_DIM]=1
+         fi
+      elif [[ ${ansi_code} -lt 17 ]]; then
+         color_space="HIGH"
+         if [[ "${intensity}" == "high" ]]; then
+            color[ANSI_BOLD]=1
+         elif [[ "${intensity}" == "low" ]]; then
+            color_space="STANDARD"
+            ansi_code=$((ansi_code - 9))
+         fi
+      fi
+   fi
+   if [[ -z "${color_space}" ]]; then
+      if [[ ${ansi_code} -lt 256 ]]; then
+         color_space="EXTENDED"
+      else
+         color_space="TRUE"
+      fi
+   fi
+   # if the color code < 8, color space = standard
+   if [[ "${color_space}" == "STANDARD" ]]; then
+      local base_var="_CPRINTF_ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
+      ansi_code="$((ansi_code + ${!base_var}))"
+      # if color code < 16, color space = high
+   elif [[ "${color_space}" == "HIGH" ]]; then
+      local base_var="_CPRINTF_ANSI_${color_plane^^}_HIGH_COLOR_BASE"
+      ansi_code="$(((ansi_code - 9) + ${!base_var}))"
+      # if color code < 255, color space = extended
+   elif [[ "${color_space}" == "EXTENDED" ]]; then
+      local prefix_var="_CPRINTF_ANSI_${color_plane^^}_EXTENDED_COLOR_PREFIX"
+      ansi_code="${!prefix_var}${ansi_code}"
+   else
+      local prefix_var="_CPRINTF_ANSI_${color_plane^^}_TRUE_COLOR_PREFIX"
+      ansi_code="${!prefix_var}${ansi_code}"
+   fi
+   color[10]="${ansi_code}"
+   for (( i = 0; i < 10; i++ )); do
+      ((_effect_counts[i] += color[i]))
+   done
+   [[ "${color_plane}" == "fg" ]] && _fg+=(${color[@]})
+   [[ "${color_plane}" == "bg" ]] && _bg+=(${color[@]})
+
+}
+
+function cprintf::colorize() {
+   local _text="$1" _prefix _code _inc
+
+   while [[ ${#_text} -gt 0 && "$_text" == *"<"* ]]; do
+      _prefix="${_text%%<*}"
+      _text="${_text:${#_prefix}}"
+
+      [[ ${#_prefix} -gt 0 ]] && {
+         cprintf::ansi_seq
+         printf "%s" "${_prefix}"
+      }
+
+      [[ "$_text" != "<"*">"* ]] && break
+
+      _code="${_text%%>*}"
+      _text="${_text:$((${#_code} + 1))}"
+      _code="${_code:1}"
+
+      [[ "${_code:0:1}" == "/" ]] && {
+         _code="${_code:1}"
+         _inc=-1
+      } || _inc=1
+
+      case ${_code} in
+         b) cprintf::add_effect $ANSI_BOLD $_inc ;;
+         dim) cprintf::add_effect $ANSI_DIM $_inc ;;
+         i) cprintf::add_effect $ANSI_ITALIC $_inc ;;
+         u) cprintf::add_effect $ANSI_UNDERLINE $_inc ;;
+         blink) cprintf::add_effect $ANSI_BLINK $_inc ;;
+         inv) cprintf::add_effect $ANSI_INVERT $_inc ;;
+         hidden) cprintf::add_effect $ANSI_HIDDEN $_inc ;;
+         strike) cprintf::add_effect $ANSI_STRIKETHROUGH $_inc ;;
+         fg*) cprintf::add_color_effect "fg" $_inc "${_code:3}" ;;
+         bg*) cprintf::add_color_effect "bg" $_inc "${_code:3}" ;;
+      esac
+   done
+
+   cprintf::ansi_seq
+   [[ ${#_text} -gt 0 ]] && printf "%s" "$(echo "${_text}" | sed 's/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g')"
+}
