@@ -176,7 +176,37 @@ __CPRINTF_ANSI_COLOR_ALIASES__['H']=16
 __CPRINTF_ANSI_COLOR_ALIASES__['X']=8
 __CPRINTF_ANSI_COLOR_ALIASES__['thing']='red!'
 
+
 . "$SCRIPT_DIR/cprintf.colorize-2.0"
+
+cprintf::show-help() {
+   cprintf "<fg:white+><b>NAME</b></fg>
+
+    ${0##*/} - formatted output with colors and text effects
+
+<fg:white+><b>USAGE</b></fg>
+
+    ${0##*/} [options] format [arguments...]
+
+<fg:white+><b>DESCRIPTION</b></fg>
+
+    Output text with colors and effects.
+
+<fg:white+><b>OPTIONS</b></fg>\n\n
+"
+   local prefix=""${SCRIPT_DIR}"/cprintf."
+   local help_text
+   for file in "$prefix"*.inc; do
+      help_text="$(grep '^#[?]' "$file" 2>/dev/null | sed 's/^#\?//; s/^[[:space:]]*//' | head -1)"
+      cprintf "   --%s\n      %s\n" "${file:${#prefix}:-4}" "${help_text}"
+   done
+
+
+      cprintf "   -h --help
+      Display this message
+\n"
+}
+
 
 cprintf::check-color-support-opt() {
    # Check number of colors supported
@@ -239,21 +269,41 @@ if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
       done
       exit 0
    fi
-   case "$1" in
-      --*)
-         function_name="cprintf::${1:2}-opt"
-         if declare -f "$function_name" >/dev/null; then
-            "$function_name" "$@"
-            exit
-         fi
-         include_file="$SCRIPT_DIR/cprintf.${1:2}.inc"
-         if [[ -f "${include_file}" ]]; then
-            shift
-            . "${include_file}"
-         else
-            cprintf "<fg:red>Unsupported command - %s</fg>" "$1"
-         fi
-         ;;
-      *) cprintf "$@" ;;
-   esac
+   # Show help if no arguments or --help
+   while [[ $# -gt 0 ]]; do
+      key="$1"
+      case "$key" in
+         -h | --help)
+            cprintf::show-help
+            exit 0
+            ;;
+         --*)
+            function_name="cprintf::${1:2}-opt"
+            if declare -f "$function_name" >/dev/null; then
+               shift
+               "$function_name" "$@"
+               exit
+            fi
+            include_file="$SCRIPT_DIR/cprintf.${1:2}.inc"
+            if [[ -f "${include_file}" ]]; then
+               shift
+               . "${include_file}"
+            else
+               cprintf "<fg:red>Unsupported command - %s</fg>" "$1"
+            fi
+            ;;
+         *)
+            break
+            ;;
+      esac
+      shift
+   done
+   if [[ $# -eq 0 ]]; then
+      echo "cprintf - formatted output with colors and text effects"
+      echo "Usage: cprintf [options] format [arguments...]"
+      echo "'cprintf -h' for options."
+      echo "See 'man cprintf' for complete documentation"
+      exit 0
+   fi
+   cprintf "$@"
 fi

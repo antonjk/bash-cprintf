@@ -1,3 +1,4 @@
+#? Show help on supported tags
 function xprintf() {
   printf "$> cprintf "
   printf " \"%s\"" "$@"

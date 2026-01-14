@@ -1,0 +1,312 @@
+.TH CPRINTF 1 "2025" "cprintf 2.0" "User Commands"
+.SH NAME
+cprintf \- formatted output with colors and text effects
+.SH SYNOPSIS
+.B cprintf
+[\fIOPTIONS\fR]
+.I format
+[\fIarguments\fR...]
+.br
+.B echo
+.I text
+|
+.B cprintf
+.SH DESCRIPTION
+.B cprintf
+is a printf-compatible utility that processes XML-style markup tags for colors and text formatting. It supports nested tags, inline modifiers, multiple color spaces (standard, high intensity, 8-bit, 24-bit), and all standard printf format specifiers.
+.PP
+When used as a library (sourced), the
+.B cprintf
+function can be called directly from bash scripts.
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+Display help message and exit
+.TP
+.B \-\-check\-color\-support
+Check terminal color support and display capabilities (8, 16, 256, 24Bit)
+.TP
+.B \-\-supported\-tags
+Display all supported tags with examples
+.TP
+.B \-\-color\-codes
+Display color code reference with all notation formats
+.SH MARKUP TAGS
+.SS Text Formatting Tags
+.TP
+.B <b></b>
+Bold text
+.TP
+.B <i></i>
+Italic text
+.TP
+.B <u></u>
+Underlined text
+.TP
+.B <dim></dim>
+Dim/faint text
+.TP
+.B <inv></inv>
+Inverted colors (swap foreground/background)
+.TP
+.B <hidden></hidden>
+Hidden/invisible text
+.TP
+.B <strike></strike>
+Strikethrough text
+.TP
+.B <blink></blink>
+Blinking text
+.SS Color Tags
+.TP
+.B <fg:\fIcolor\fB></fg>
+Set foreground color
+.TP
+.B <bg:\fIcolor\fB></bg>
+Set background color
+.PP
+Colors can be specified using multiple notations (see COLOR NOTATION section).
+.SH COLOR NOTATION
+.SS Decimal Numbers
+.TP
+.B 0-7
+Standard colors (black, red, green, yellow, blue, magenta, cyan, white)
+.TP
+.B 9
+Terminal default color
+.TP
+.B 16-255
+8-bit extended color palette
+.TP
+.B 256+
+24-bit true colors (RGB as decimal value)
+.SS @ Prefix (Explicit Extended/True Color)
+.TP
+.B @0-@255
+8-bit extended colors
+.TP
+.B @256+
+24-bit true colors
+.SS # Prefix (Hex Notation)
+.TP
+.B #0-#7
+Standard colors (single hex digit)
+.TP
+.B #8-#F
+High intensity colors (single hex digit)
+.TP
+.B #00-#FF
+8-bit extended colors (two hex digits)
+.TP
+.B #RRGGBB
+24-bit true colors (six hex digits, RGB format)
+.SS Color Name Aliases
+.TP
+.B lowercase
+Standard colors: black, red, green, yellow, blue, magenta, cyan, white
+.TP
+.B Capitalized
+High intensity colors: Black, Red, Green, Yellow, Blue, Magenta, Cyan, White
+.SH INLINE MODIFIERS
+Modifiers can be appended to color specifications to add effects or change intensity:
+.TP
+.B +
+Increase intensity (standard→high, high→bold, 8-bit/24-bit→bold)
+.TP
+.B \-
+Decrease intensity (high→standard, any→dim)
+.TP
+.B !
+Bold effect
+.TP
+.B *
+Italic effect
+.TP
+.B _
+Underline effect
+.TP
+.B =
+Strikethrough effect
+.TP
+.B ~
+Invert effect
+.PP
+Multiple modifiers can be combined, e.g., <fg:red!*_> for bold italic underlined red.
+.SH INTENSITY MODIFIER BEHAVIOR
+.TP
+.B Standard Colors (0-7)
++ → High intensity color
+.br
+\- → Dim effect
+.TP
+.B High Intensity Colors (8-15)
++ → Bold effect
+.br
+\- → Standard color
+.TP
+.B 8-Bit Colors (16-255)
++ → Bold effect
+.br
+\- → Dim effect
+.TP
+.B 24-Bit Colors (256+)
++ → Bold effect
+.br
+\- → Dim effect
+.SH HTML ENTITIES
+The following HTML entities are supported for literal characters:
+.TP
+.B &lt;
+< (less than)
+.TP
+.B &gt;
+> (greater than)
+.TP
+.B &amp;
+& (ampersand)
+.SH EXAMPLES
+.SS Basic Usage
+.PP
+.nf
+cprintf "<fg:red>Error:</fg> File not found\\n"
+cprintf "<b>Bold</b> and <i>italic</i> text\\n"
+cprintf "<fg:blue><u>Underlined blue text</u></fg>\\n"
+.fi
+.SS Color Notations
+.PP
+.nf
+# Standard colors
+cprintf "<fg:red>Red text</fg>\\n"
+cprintf "<fg:1>Red text (code)</fg>\\n"
+cprintf "<fg:#1>Red text (hex)</fg>\\n"
+
+# High intensity
+cprintf "<fg:Red>Bright red</fg>\\n"
+cprintf "<fg:red+>Bright red (modifier)</fg>\\n"
+cprintf "<fg:#9>Bright red (hex)</fg>\\n"
+
+# 8-bit colors
+cprintf "<fg:196>Bright red (8-bit)</fg>\\n"
+cprintf "<fg:@196>Bright red (@prefix)</fg>\\n"
+cprintf "<fg:#C4>Bright red (hex)</fg>\\n"
+
+# 24-bit true colors
+cprintf "<fg:#FF6B6B>Custom red</fg>\\n"
+.fi
+.SS Inline Modifiers
+.PP
+.nf
+cprintf "<fg:red!>Bold red</fg>\\n"
+cprintf "<fg:green*>Italic green</fg>\\n"
+cprintf "<fg:blue_>Underlined blue</fg>\\n"
+cprintf "<fg:yellow~>Inverted yellow</fg>\\n"
+cprintf "<fg:red!*_>Bold italic underlined red</fg>\\n"
+.fi
+.SS Nested Tags
+.PP
+.nf
+cprintf "<fg:red>Red <b>bold</b> text</fg>\\n"
+cprintf "<bg:yellow><fg:black>Black on yellow</fg></bg>\\n"
+cprintf "<fg:blue><b><u>Bold underlined blue</u></b></fg>\\n"
+.fi
+.SS Printf Formatting
+.PP
+.nf
+cprintf "<fg:red>Error:</fg> <b>%s</b>\\n" "File not found"
+cprintf "<fg:green>Success:</fg> Processed <b>%d</b> items\\n" 42
+cprintf "<fg:blue>Progress:</fg> %.2f%% complete\\n" 75.5
+.fi
+.SS Piped Input
+.PP
+.nf
+echo "<fg:red>Error message</fg>" | cprintf
+cat file.txt | cprintf
+.fi
+.SS Library Usage
+.PP
+.nf
+#!/bin/bash
+source /usr/local/bin/cprintf
+
+cprintf "<fg:green>Success:</fg> %s\\n" "Operation completed"
+cprintf "<fg:red!><b>ERROR:</b></fg> %s\\n" "Failed to connect"
+.fi
+.SH COLOR SPACES
+.SS Standard Colors (0-7)
+8 basic colors supported by all terminals:
+.br
+0=black, 1=red, 2=green, 3=yellow, 4=blue, 5=magenta, 6=cyan, 7=white
+.SS High Intensity Colors (8-15)
+Bright versions of standard colors:
+.br
+8-15 or use + modifier with standard colors
+.SS 8-Bit Extended Colors (16-255)
+256-color palette:
+.br
+16-231: 6×6×6 RGB cube
+.br
+232-255: Grayscale ramp
+.SS 24-Bit True Colors (16,777,216 colors)
+Full RGB color support using #RRGGBB notation or decimal values 256+
+.SH TERMINAL SUPPORT
+Most modern terminals support standard, high intensity, and 8-bit colors. True color (24-bit) support varies by terminal.
+.PP
+Check your terminal's capabilities:
+.PP
+.nf
+cprintf --check-color-support
+.fi
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Error (invalid format, unsupported option, etc.)
+.SH ENVIRONMENT
+.TP
+.B COLORTERM
+Set to "truecolor" or "24bit" to indicate 24-bit color support
+.TP
+.B TERM
+Terminal type, affects color capability detection
+.SH FILES
+.TP
+.I /usr/local/bin/cprintf
+Main executable
+.TP
+.I ~/.bashrc
+Source cprintf here for library usage
+.SH NOTES
+.IP \(bu 2
+Tags must be properly closed with </tag>
+.IP \(bu 2
+Nested tags are supported and maintain proper state
+.IP \(bu 2
+Color codes are case-sensitive for aliases (red vs Red)
+.IP \(bu 2
+Spaces in color specifications are automatically stripped
+.IP \(bu 2
+When sourced, prevents multiple sourcing with __CPRINTF_INC_SOURCED__ guard
+.SH BUGS
+Report bugs at: https://github.com/antonjk/bash-cprintf/issues
+.SH AUTHOR
+Written by Anton Koekemoer
+.SH COPYRIGHT
+Copyright © 2025 Anton Koekemoer
+.br
+License: MIT License
+.SH SEE ALSO
+.BR printf (1),
+.BR echo (1),
+.BR tput (1)
+.PP
+Full documentation: https://github.com/antonjk/bash-cprintf
+.PP
+Color code reference:
+.br
+.B cprintf --color-codes
+.PP
+Supported tags reference:
+.br
+.B cprintf --supported-tags
