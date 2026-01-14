@@ -1,17 +1,101 @@
-=== Color Aliases ===
+# Color Codes Reference
 
-For the standard color space, we use names that are all in lower case
+This document describes all color notation formats, color spaces, aliases, and modifiers supported by cprintf.
 
-   <bg:0> <fg:7!> black   </fg> </bg><bg:1> <fg:6!> red     </fg> </bg><bg:2> <fg:5!> green   </fg> </bg><bg:3> <fg:4!> yellow  </fg> </bg><bg:4> <fg:3!> blue    </fg> </bg><bg:5> <fg:2!> magenta </fg> </bg><bg:6> <fg:1!> cyan    </fg> </bg><bg:7> <fg:0!> white   </fg> </bg>
+## Color Notation Formats
 
-Capitalized named colors represent bright versions of the corresponding colors.
+Colors can be specified in multiple ways:
 
-   <bg:8> <fg:16!> Black   </fg> </bg><bg:9> <fg:15!> Red     </fg> </bg><bg:10> <fg:14!> Green   </fg> </bg><bg:11> <fg:13!> Yellow  </fg> </bg><bg:12> <fg:12!> Blue    </fg> </bg><bg:13> <fg:11!> Magenta </fg> </bg><bg:14> <fg:10!> Cyan    </fg> </bg><bg:15> <fg:9!> White   </fg> </bg>
+### Decimal Numbers (0-9, 16-255, 256+)
+   - **0-7**: Standard colors
+   - **9**: Special code - resets to terminal default
+   - **16-255**: 8-bit extended colors
+   - **256+**: 24-bit true colors (RGB as single decimal)
 
-=== Color Codes ===
+### @ Prefix (Extended/True Color)
+   - **@0-@255**: 8-bit extended colors
+   - **@256+**: 24-bit true colors
 
-Standard: <bg:0> <fg:8>  0</fg> </bg><bg:1> <fg:7>  1</fg> </bg><bg:2> <fg:6>  2</fg> </bg><bg:3> <fg:5>  3</fg> </bg><bg:4> <fg:4>  4</fg> </bg><bg:5> <fg:3>  5</fg> </bg><bg:6> <fg:2>  6</fg> </bg><bg:7> <fg:1>  7</fg> </bg>
-High    : <bg:8> <fg:15>  8</fg> </bg><bg:9> <fg:14>  9</fg> </bg><bg:10> <fg:13> 10</fg> </bg><bg:11> <fg:12> 11</fg> </bg><bg:12> <fg:11> 12</fg> </bg><bg:13> <fg:10> 13</fg> </bg><bg:14> <fg:9> 14</fg> </bg><bg:15> <fg:8> 15</fg> </bg>
+### # Prefix (Hex Notation)
+   - **#0-#7**: Standard colors (single hex digit)
+   - **#8-#F**: High intensity colors (single hex digit)
+   - **#00-#FF**: 8-bit extended colors (two hex digits)
+   - **#RRGGBB**: 24-bit true colors (six hex digits)
+
+### Color Name Aliases
+   - **lowercase**: Standard colors (black, red, green, yellow, blue, magenta, cyan, white)
+   - **Capitalized**: High intensity colors (Black, Red, Green, Yellow, Blue, Magenta, Cyan, White)
+
+## Intensity Modifiers (+/-)
+
+Modifiers change color intensity or add effects:
+
+   **Standard Colors (0-7)**
+      + → High intensity color
+      - → Dim effect
+
+   **High Intensity Colors (8-15)**
+      + → Bold effect
+      - → Standard color
+
+   **8-Bit Colors (16-255)**
+      + → Bold effect
+      - → Dim effect
+
+   **24-Bit Colors (256+)**
+      + → Bold effect
+      - → Dim effect
+
+## Color Spaces
+
+### Standard Colors (0-7)
+
+The standard color space provides 8 basic colors:
+
+   <bg:0> <fg:white>   0   </fg></bg> <bg:1> <fg:cyan>   1   </fg></bg> <bg:2> <fg:magenta>   2   </fg></bg> <bg:3> <fg:blue>   3   </fg></bg> <bg:4> <fg:yellow>   4   </fg></bg> <bg:5> <fg:green>   5   </fg></bg> <bg:6> <fg:red>   6   </fg></bg> <bg:7> <fg:black>   7   </fg></bg>
+   black    red      green    yellow   blue     magenta  cyan     white
+
+**Notation Options:**
+   - Decimal: 0, 1, 2, 3, 4, 5, 6, 7
+   - Hex: #0, #1, #2, #3, #4, #5, #6, #7
+   - Aliases: black, red, green, yellow, blue, magenta, cyan, white
+
+**Examples:**
+   <fg:0>0</fg> = <fg:#0>#0</fg> = <fg:black>black</fg>
+   <fg:1>1</fg> = <fg:#1>#1</fg> = <fg:red>red</fg>
+   <fg:4>4</fg> = <fg:#4>#4</fg> = <fg:blue>blue</fg>
+
+**With Modifiers:**
+   <fg:0+>0+</fg> = <fg:#0+>#0+</fg> = <fg:black+>black+</fg> → High intensity
+   <fg:1->1-</fg> = <fg:#1->#1-</fg> = <fg:red->red-</fg> → Dim effect
+
+### High Intensity Colors (8-15)
+
+High intensity (bright) versions of standard colors:
+
+   <bg:#8> <fg:white>  #8  </fg></bg> <bg:#9> <fg:cyan>  #9  </fg></bg> <bg:#A> <fg:magenta>  #A  </fg></bg> <bg:#B> <fg:blue>  #B  </fg></bg> <bg:#C> <fg:yellow>  #C  </fg></bg> <bg:#D> <fg:green>  #D  </fg></bg> <bg:#E> <fg:red>  #E  </fg></bg> <bg:#F> <fg:black>  #F  </fg></bg>
+
+**Notation Options:**
+   - Hex: #8, #9, #A, #B, #C, #D, #E, #F
+   - Decimal with +: 0+, 1+, 2+, 3+, 4+, 5+, 6+, 7+
+   - Aliases with +: black+, red+, green+, yellow+, blue+, magenta+, cyan+, white+
+   - Capitalized aliases: Black, Red, Green, Yellow, Blue, Magenta, Cyan, White
+
+**Examples:**
+   <fg:#8>#8</fg> = <fg:0+>0+</fg> = <fg:black+>black+</fg> = <fg:Black>Black</fg>
+   <fg:#9>#9</fg> = <fg:1+>1+</fg> = <fg:red+>red+</fg> = <fg:Red>Red</fg>
+   <fg:#C>#C</fg> = <fg:4+>4+</fg> = <fg:blue+>blue+</fg> = <fg:Blue>Blue</fg>
+
+**With Modifiers:**
+   <fg:Black+>Black+</fg> = <fg:#8+>#8+</fg> → Bold effect
+   <fg:Red->Red-</fg> = <fg:#9->#9-</fg> → Converts to standard red
+
+### 8-Bit Extended Colors (16-255)
+
+256-color palette providing extended color range:
+
+Standard: <bg:@0> <fg:8>  @0</fg> </bg><bg:@1> <fg:7>  @1</fg> </bg><bg:@2> <fg:6>  @2</fg> </bg><bg:@3> <fg:5>  @3</fg> </bg><bg:@4> <fg:4>  @4</fg> </bg><bg:@5> <fg:3>  @5</fg> </bg><bg:@6> <fg:2>  @6</fg> </bg><bg:@7> <fg:1>  @7</fg> </bg>
+High    : <bg:@8> <fg:15>  @8</fg> </bg><bg:@9> <fg:14>  @9</fg> </bg><bg:@10> <fg:13> @10</fg> </bg><bg:@11> <fg:12> @11</fg> </bg><bg:@12> <fg:11> @12</fg> </bg><bg:@13> <fg:10> @13</fg> </bg><bg:@14> <fg:9> @14</fg> </bg><bg:@15> <fg:8> @15</fg> </bg>
 
           <bg:16> <fg:255!>16 </fg> </bg><bg:17> <fg:255!>17 </fg> </bg><bg:18> <fg:255!>18 </fg> </bg><bg:19> <fg:255!>19 </fg> </bg><bg:20> <fg:255!>20 </fg> </bg><bg:21> <fg:255!>21 </fg> </bg> <bg:34> <fg:0!>34 </fg> </bg><bg:35> <fg:0!>35 </fg> </bg><bg:36> <fg:0!>36 </fg> </bg><bg:37> <fg:0!>37 </fg> </bg><bg:38> <fg:0!>38 </fg> </bg><bg:39> <fg:0!>39 </fg> </bg>
           <bg:52> <fg:255!>52 </fg> </bg><bg:53> <fg:255!>53 </fg> </bg><bg:54> <fg:255!>54 </fg> </bg><bg:55> <fg:255!>55 </fg> </bg><bg:56> <fg:255!>56 </fg> </bg><bg:57> <fg:255!>57 </fg> </bg> <bg:70> <fg:0!>70 </fg> </bg><bg:71> <fg:0!>71 </fg> </bg><bg:72> <fg:0!>72 </fg> </bg><bg:73> <fg:0!>73 </fg> </bg><bg:74> <fg:0!>74 </fg> </bg><bg:75> <fg:0!>75 </fg> </bg>
@@ -39,3 +123,83 @@ High    : <bg:8> <fg:15>  8</fg> </bg><bg:9> <fg:14>  9</fg> </bg><bg:10> <fg:13
           <bg:244> <fg:0!>244</fg> </bg><bg:245> <fg:0!>245</fg> </bg><bg:246> <fg:0!>246</fg> </bg><bg:247> <fg:0!>247</fg> </bg><bg:248> <fg:0!>248</fg> </bg><bg:249> <fg:0!>249</fg> </bg>
           <bg:250> <fg:0!>250</fg> </bg><bg:251> <fg:0!>251</fg> </bg><bg:252> <fg:0!>252</fg> </bg><bg:253> <fg:0!>253</fg> </bg><bg:254> <fg:0!>254</fg> </bg><bg:255> <fg:0!>255</fg> </bg>
 
+
+**Notation Options:**
+   - Decimal: 16-255
+   - @ prefix: @0-@255
+   - Hex (2 digits): #00-#FF
+
+**Examples:**
+   <bg:196><fg:white> 196 </fg></bg> <bg:@196><fg:white > @196 </fg></bg> <bg:#C4><fg:white> #C4 </fg></bg>  (Bright red)
+   <bg:46 ><fg:black>  46 </fg></bg> <bg:@46 ><fg:black > @46  </fg></bg> <bg:#2E><fg:black> #2E </fg></bg>  (Bright green)
+   <bg:21 ><fg:white>  21 </fg></bg> <bg:@21 ><fg:white > @21  </fg></bg> <bg:#15><fg:white> #15 </fg></bg>  (Bright blue)
+   <bg:208><fg:black> 208 </fg></bg> <bg:@208><fg:black > @208 </fg></bg> <bg:#D0><fg:black> #D0 </fg></bg>  (Orange)
+
+**Color Ranges:**
+   - 16-231: 6×6×6 RGB cube
+   - 232-255: Grayscale ramp
+
+**With Modifiers:**
+   <fg:196+>196+</fg> = <fg:@196+>@196+</fg> = <fg:#C4+>#C4+</fg> → Bold effect
+   <fg:46->46-</fg> = <fg:@46->@46-</fg> = <fg:#2E->#2E-</fg> → Dim effect
+
+### 24-Bit True Colors (16,777,216 colors)
+
+Full RGB color support using 24-bit values:
+
+**Notation Options:**
+   - Hex (6 digits): #RRGGBB
+   - Decimal: 256-16777215
+   - @ prefix: @256-@16777215
+
+**Examples:**
+   <bg:#FF6B6B> <fg:black> #FF6B6B </fg></bg>  (Custom red)
+   <bg:#4ECDC4> <fg:black> #4ECDC4 </fg></bg>  (Custom teal)
+   <bg:#45B7D1> <fg:black> #45B7D1 </fg></bg>  (Custom blue)
+   <bg:#F7DC6F> <fg:black> #F7DC6F </fg></bg>  (Custom yellow)
+
+**RGB Breakdown:**
+   #FF6B6B = R:255, G:107, B:107
+   #4ECDC4 = R:78, G:205, B:196
+   #45B7D1 = R:69, G:183, B:209
+
+**With Modifiers:**
+   <fg:#FF6B6B >#FF6B6B</fg> → <fg:#FF6B6B+>#FF6B6B+</fg> → Bold effect
+   <fg:#4ECDC4 >#4ECDC4</fg> → <fg:#4ECDC4->#4ECDC4-</fg> → Dim effect
+
+## Special Color Code
+
+**Code 9**: Resets color to terminal default
+   <fg:9>Terminal default foreground</fg>
+   <bg:9>Terminal default background</bg>
+
+## Summary Tables
+
+### Standard Colors (0-7)
+   Decimal:  0, 1, 2, 3, 4, 5, 6, 7
+   Hex:      #0, #1, #2, #3, #4, #5, #6, #7
+   Aliases:  black, red, green, yellow, blue, magenta, cyan, white
+
+### High Intensity Colors (8-15)
+   Hex:      #8, #9, #A, #B, #C, #D, #E, #F
+   Decimal+: 0+, 1+, 2+, 3+, 4+, 5+, 6+, 7+
+   Aliases+: black+, red+, green+, yellow+, blue+, magenta+, cyan+, white+
+   Capital:  Black, Red, Green, Yellow, Blue, Magenta, Cyan, White
+
+### 8-Bit Extended Colors (16-255)
+   Decimal:  16-255
+   @Prefix:  @16-@255
+   Hex:      #10-#FF
+
+### 24-Bit True Colors (256+)
+   Hex:      #RRGGBB (6 hex digits)
+   Decimal:  256-16777215
+   @Prefix:  @256-@16777215
+
+## Checking Terminal Support
+
+Use the --check-color-support option to verify your terminal's capabilities:
+
+   ./cprintf --check-color-support
+
+Most modern terminals support Standard, High intensity, and 8-bit colors. True color (24-bit) support varies by terminal.

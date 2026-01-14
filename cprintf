@@ -68,26 +68,28 @@ __CPRINTF_INC_SOURCED__=1
 ANSI_ESC=$'\033'
 
 # Text effects (SGR codes)
-ANSI_BOLD=1; # Bold/bright text
-ANSI_DIM=2; # Dim/faint text
-ANSI_ITALIC=3; # Italic text
-ANSI_UNDERLINE=4; # Underlined text
-ANSI_BLINK=5; # Blinking text
-ANSI_INVERT=7; # Inverted foreground/background
-ANSI_HIDDEN=8; # Hidden/invisible text
-ANSI_STRIKETHROUGH=9; #< Strikethrough text
+ANSI_BOLD=1          # Bold/bright text
+ANSI_DIM=2           # Dim/faint text
+ANSI_ITALIC=3        # Italic text
+ANSI_UNDERLINE=4     # Underlined text
+ANSI_BLINK=5         # Blinking text
+ANSI_INVERT=7        # Inverted foreground/background
+ANSI_HIDDEN=8        # Hidden/invisible text
+ANSI_STRIKETHROUGH=9 #< Strikethrough text
+
+_CPRINTF_ANSI_DISABLE_EFFECT_PREFIX="2" # Disable effect
 
 # Extended color prefixes (256-color and true color)
-_CPRINTF_ANSI_FG_EXTENDED_COLOR_PREFIX="38;5;"; # 256-color foreground prefix
-_CPRINTF_ANSI_BG_EXTENDED_COLOR_PREFIX="48;5;"; # 256-color background prefix
-_CPRINTF_ANSI_FG_TRUE_COLOR_PREFIX="38;2;"; # True color foreground prefix
-_CPRINTF_ANSI_BG_TRUE_COLOR_PREFIX="48;2;"; # True color background prefix
+_CPRINTF_ANSI_FG_EXTENDED_COLOR_PREFIX="38;5;" # 256-color foreground prefix
+_CPRINTF_ANSI_BG_EXTENDED_COLOR_PREFIX="48;5;" # 256-color background prefix
+_CPRINTF_ANSI_FG_TRUE_COLOR_PREFIX="38;2;"     # True color foreground prefix
+_CPRINTF_ANSI_BG_TRUE_COLOR_PREFIX="48;2;"     # True color background prefix
 
 # Standard and high-intensity color bases
-_CPRINTF_ANSI_FG_STANDARD_COLOR_BASE=30; # Standard foreground colors (30-37)
-_CPRINTF_ANSI_BG_STANDARD_COLOR_BASE=40; # Standard background colors (40-47)
-_CPRINTF_ANSI_FG_HIGH_COLOR_BASE=90; # High-intensity foreground colors (90-97)
-_CPRINTF_ANSI_BG_HIGH_COLOR_BASE=100; # High-intensity background colors (100-107)
+_CPRINTF_ANSI_FG_STANDARD_COLOR_BASE=30 # Standard foreground colors (30-37)
+_CPRINTF_ANSI_BG_STANDARD_COLOR_BASE=40 # Standard background colors (40-47)
+_CPRINTF_ANSI_FG_HIGH_COLOR_BASE=90     # High-intensity foreground colors (90-97)
+_CPRINTF_ANSI_BG_HIGH_COLOR_BASE=100    # High-intensity background colors (100-107)
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Convert color name/code with modifiers to ANSI escape sequence.
@@ -128,7 +130,7 @@ _CPRINTF_ANSI_BG_HIGH_COLOR_BASE=100; # High-intensity background colors (100-10
 #
 # Examples:
 #   color_ansi_code "fg" "red"      # Returns: "31"
-#   color_ansi_code "bg" "blue+"    # Returns: "104" 
+#   color_ansi_code "bg" "blue+"    # Returns: "104"
 #   color_ansi_code "fg" "b!_"      # Returns: "1;4;31" (bold underline black)
 #   color_ansi_code "fg" "196*~"    # Returns: "3;7;38;5;196" (italic invert 256-color)
 #   color_ansi_code "fg" "red=!"     # Returns: "9;1;31" (strikethrough bold red)
@@ -142,16 +144,16 @@ __CPRINTF_ANSI_COLOR_ALIASES__['blue']=4
 __CPRINTF_ANSI_COLOR_ALIASES__['magenta']=5
 __CPRINTF_ANSI_COLOR_ALIASES__['cyan']=6
 __CPRINTF_ANSI_COLOR_ALIASES__['white']=7
-__CPRINTF_ANSI_COLOR_ALIASES__['default']=8
+__CPRINTF_ANSI_COLOR_ALIASES__['default']=9
 
-__CPRINTF_ANSI_COLOR_ALIASES__['Black']=9
-__CPRINTF_ANSI_COLOR_ALIASES__['Red']=10
-__CPRINTF_ANSI_COLOR_ALIASES__['Green']=11
-__CPRINTF_ANSI_COLOR_ALIASES__['Yellow']=12
-__CPRINTF_ANSI_COLOR_ALIASES__['Blue']=13
-__CPRINTF_ANSI_COLOR_ALIASES__['Magenta']=14
-__CPRINTF_ANSI_COLOR_ALIASES__['Cyan']=15
-__CPRINTF_ANSI_COLOR_ALIASES__['White']=16
+__CPRINTF_ANSI_COLOR_ALIASES__['Black']='0+'
+__CPRINTF_ANSI_COLOR_ALIASES__['Red']='1+'
+__CPRINTF_ANSI_COLOR_ALIASES__['Green']='2+'
+__CPRINTF_ANSI_COLOR_ALIASES__['Yellow']='3+'
+__CPRINTF_ANSI_COLOR_ALIASES__['Blue']='4+'
+__CPRINTF_ANSI_COLOR_ALIASES__['Magenta']='5+'
+__CPRINTF_ANSI_COLOR_ALIASES__['Cyan']='6+'
+__CPRINTF_ANSI_COLOR_ALIASES__['White']='7+'
 
 # Shell config colors
 __CPRINTF_ANSI_COLOR_ALIASES__['a']=0
@@ -172,8 +174,23 @@ __CPRINTF_ANSI_COLOR_ALIASES__['F']=14
 __CPRINTF_ANSI_COLOR_ALIASES__['G']=15
 __CPRINTF_ANSI_COLOR_ALIASES__['H']=16
 __CPRINTF_ANSI_COLOR_ALIASES__['X']=8
+__CPRINTF_ANSI_COLOR_ALIASES__['thing']='red!'
 
 . "$SCRIPT_DIR/cprintf.colorize-2.0"
+
+cprintf::check-color-support-opt() {
+   # Check number of colors supported
+   colors=$(tput colors 2>/dev/null)
+   # Not a terminal
+   if [[ ! -t 1 ]]; then
+      colors=0
+   fi
+   [[ $colors -ge 8 ]] && echo "8"
+   [[ $colors -ge 16 ]] && echo "16"
+   [[ $colors -ge 256 ]] && echo "256"
+   # Check for true color (24-bit)
+   [[ $COLORTERM == "truecolor" || $COLORTERM == "24bit" ]] && echo "24Bit"
+}
 #-----------------------------------------------------------------------------------------------------------------------
 # Formatted output with color and style markup to stdout.
 #
@@ -209,7 +226,7 @@ __CPRINTF_ANSI_COLOR_ALIASES__['X']=8
 function cprintf() {
    local template
    template="$(cprintf::colorize "$1")"
-#  template="$1"
+   #template="$1"
    shift
    printf "${template}" "$@"
 }
@@ -218,20 +235,25 @@ function cprintf() {
 if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
    if [[ $# -eq 0 && ! -t 0 ]]; then
       while IFS= read -r line; do
-        cprintf "${line}\n"
+         cprintf "${line}\n"
       done
       exit 0
    fi
    case "$1" in
       --*)
+         function_name="cprintf::${1:2}-opt"
+         if declare -f "$function_name" >/dev/null; then
+            "$function_name" "$@"
+            exit
+         fi
          include_file="$SCRIPT_DIR/cprintf.${1:2}.inc"
          if [[ -f "${include_file}" ]]; then
+            shift
             . "${include_file}"
          else
             cprintf "<fg:red>Unsupported command - %s</fg>" "$1"
          fi
          ;;
-      *)   cprintf "$@" ;;
+      *) cprintf "$@" ;;
    esac
 fi
-

@@ -3,6 +3,30 @@ declare -a _effect_counts=(0 0 0 0 0 0 0 0 0 0)
 declare -a _fg=(0 0 0 0 0 0 0 0 0 0 '39')
 declare -a _bg=(0 0 0 0 0 0 0 0 0 0 '49')
 
+#-----------------------------------------------------------------------------------------------------------------------
+# Generate and output ANSI escape sequence based on current style state.
+#
+# Compares current style state with effect counts and color stacks to determine which ANSI codes need to be output.
+# Only outputs codes when changes are detected to minimize escape sequence overhead.
+#
+# State Management:
+#   - Tracks 10 text effects (bold, dim, italic, underline, blink, invert, hidden, strikethrough)
+#   - Tracks foreground color (index 10) and background color (index 11)
+#   - Enables effects when count > 0 and currently disabled
+#   - Disables effects when count = 0 and currently enabled
+#   - Updates colors when top of color stack differs from current state
+#
+# Output Format:
+#   ESC[code1;code2;...m where codes are semicolon-separated ANSI SGR parameters
+#   Only outputs when changes detected (ansi_seq is non-empty)
+#
+# Global Variables:
+#   _current_style - Current active style state (11 elements)
+#   _effect_counts - Reference counts for each effect (10 elements)
+#   _fg - Foreground color stack with effects
+#   _bg - Background color stack with effects
+#   ANSI_ESC - Escape character
+#-----------------------------------------------------------------------------------------------------------------------
 function cprintf::ansi_seq() {
    local ansi_seq effects=0
    for (( e = 1; e < 10; e++ )); do
@@ -11,13 +35,12 @@ function cprintf::ansi_seq() {
          ansi_seq+=";$e"
       }
       ((effects += _current_style[e]))
-   done
-   ((effects > 0)) && _current_style[0]=0 || {
-      ((_current_style[0] == 0)) && {
-         ansi_seq=";0"
-         _current_style[1]=1
+      ((_effect_counts[e] == 0 && _current_style[e] > 0)) && {
+         _current_style[e]=0
+         ansi_seq+=";${_CPRINTF_ANSI_DISABLE_EFFECT_PREFIX}$e"
       }
-   }
+
+   done
    [[ "${_current_style[10]}" != "${_fg[-1]}" ]] && {
       ansi_seq+=";${_fg[-1]}"
       _current_style[10]="${_fg[-1]}"
@@ -29,94 +52,191 @@ function cprintf::ansi_seq() {
    [[ -n "${ansi_seq}" ]] && printf "%b[%bm" "${ANSI_ESC}" "${ansi_seq:1}"
 }
 
+#-----------------------------------------------------------------------------------------------------------------------
+# Add or remove a text effect by adjusting its reference count.
+#
+# Maintains reference counting for text effects to support nested tags. When count reaches zero,
+# the effect is disabled in the next ANSI sequence output.
+#
+# Arguments:
+#   $1 - Effect index (ANSI_BOLD, ANSI_DIM, ANSI_ITALIC, etc.)
+#   $2 - Increment value (positive to add, negative to remove)
+#
+# Global Variables:
+#   _effect_counts - Array of reference counts for each effect
+#-----------------------------------------------------------------------------------------------------------------------
 function cprintf::add_effect() {
    ((_effect_counts[$1] += $2))
    ((_effect_counts[$1] < 0)) && ((_effect_counts[$1] = 0))
 }
 
+#-----------------------------------------------------------------------------------------------------------------------
+# Remove the most recent color from the color stack and restore previous state.
+#
+# Pops the top 11 elements from the specified color plane stack (10 effects + 1 color code).
+# Decrements effect counts by the amounts stored in the popped color entry to restore
+# the previous nesting level's effect state.
+#
+# Arguments:
+#   $1 - Color plane: "fg" (foreground) or "bg" (background)
+#
+# Global Variables:
+#   _fg - Foreground color stack
+#   _bg - Background color stack
+#   _effect_counts - Effect reference counts
+#-----------------------------------------------------------------------------------------------------------------------
+function cprintf::remove_color_effect() {
+   local color_plane="$1"
+
+   if [[ "$color_plane" == "fg" && ${#_fg[@]} -gt 11 ]]; then
+      local offset=$((${#_fg[@]} - 11))
+      for (( i = 0; i < 10; i++ )); do
+         ((_effect_counts[i] -= ${_fg[offset + i]}))
+      done
+   elif [[ "$color_plane" == "bg" && ${#_bg[@]} -gt 11 ]]; then
+      local offset=$((${#_bg[@]} - 11))
+      for (( i = 0; i < 10; i++ )); do
+         ((_effect_counts[i] -= _bg[offset + i]))
+      done
+   fi
+   for (( i = 0; i < 11; i++ )); do
+      unset "_${color_plane}[-1]"
+   done
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Parse color specification and push color state onto color stack.
+#
+# Processes color codes with optional modifiers and inline effects, resolves to ANSI escape codes,
+# and pushes the complete color state (effects + color) onto the appropriate color stack.
+#
+# Color Notation Support:
+#   Decimal: 0-7 (standard), 9 (default), 16-255 (8-bit), 256+ (24-bit)
+#   @ Prefix: @0-@255 (8-bit), @256+ (24-bit)
+#   # Prefix: #0-#7 (standard), #8-#F (high), #00-#FF (8-bit), #RRGGBB (24-bit)
+#   Aliases: lowercase (standard), Capitalized (high intensity)
+#
+# Inline Modifiers:
+#   + - Increase intensity (standard→high, high→bold, 8-bit/24-bit→bold)
+#   - - Decrease intensity (high→standard, any→dim)
+#   ! - Bold effect
+#   * - Italic effect
+#   _ - Underline effect
+#   = - Strikethrough effect
+#   ~ - Invert effect
+#
+# Processing Order:
+#   1. Strip all spaces from color code
+#   2. Process trailing modifiers right-to-left
+#   3. Resolve color aliases
+#   4. Parse color notation and determine color space
+#   5. Apply intensity modifiers
+#   6. Convert to ANSI escape code format
+#   7. Push color state (10 effects + color code) onto stack
+#
+# Arguments:
+#   $1 - Color plane: "fg" (foreground) or "bg" (background)
+#   $2 - Color specification with optional modifiers (e.g., "red+!", "#FF0000", "@196*")
+#
+# Global Variables:
+#   _fg - Foreground color stack
+#   _bg - Background color stack
+#   _effect_counts - Effect reference counts
+#   __CPRINTF_ANSI_COLOR_ALIASES__ - Color name to code mapping
+#   ANSI_* - Effect index constants
+#   _CPRINTF_ANSI_*_COLOR_BASE - Base codes for standard/high colors
+#   _CPRINTF_ANSI_*_COLOR_PREFIX - Prefixes for extended/true colors
+#-----------------------------------------------------------------------------------------------------------------------
 function cprintf::add_color_effect() {
    local color_plane="$1"
-   local inc=$2
-   local color_code="$3"
-
-   if [[ $inc -lt 0 ]]; then
-      if [[ "$color_plane" == "fg" && ${#_fg[@]} -gt 11 ]]; then
-         for (( i = ${#_fg[@]} - 11; i < ${#_fg[@]} - 1; i++ )); do
-            ((_effect_counts[i] -= _fg[i]))
-         done
-      elif [[ "$color_plane" == "bg" && ${#_bg[@]} -gt 11 ]]; then
-         for (( i = ${#_bg[@]} - 11; i < ${#_bg[@]} - 1; i++ )); do
-            ((_effect_counts[i] -= _bg[i]))
-         done
-      fi
-      for (( i = 0; i < 11; i++ )); do
-         unset "_${color_plane}[-1]"
-      done
-      return
-   fi
-
+   local color_code="${2// /}"
+   local color_space
+   local ansi_code
    local intensity=0
    local color=(0 0 0 0 0 0 0 0 0 0 "")
 
    while [[ ${#color_code} -gt 1 ]]; do
       case ${color_code: -1} in
-         \+) intensity=1 ;;
-         -) intensity=-1 ;;
+         \+) ((intensity+=1)) ;;
+         -) ((intensity-=1)) ;;
          \*) ((color[ANSI_ITALIC] = 1)) ;;
          \!) ((color[ANSI_BOLD] = 1)) ;;
          _) ((color[ANSI_UNDERLINE] = 1)) ;;
          =) ((color[ANSI_STRIKETHROUGH] = 1)) ;;
          \~) ((color[ANSI_INVERT] = 1)) ;;
-         *) break ;;
+         *)
+            lookup="${__CPRINTF_ANSI_COLOR_ALIASES__[${color_code}]}"
+            if [[ -n "${lookup}" ]]; then
+               color_code="${lookup}"
+               continue
+            fi
+            break
+            ;;
       esac
       color_code="${color_code:0:-1}"
    done
 
-   if [[ "$color_code" =~ ^[0-9]+$ ]]; then
-      ansi_code="$color_code"
-   else
-      ansi_code="${__CPRINTF_ANSI_COLOR_ALIASES__[${color_code}]}"
-      # Preprocess
-      if [[ ${ansi_code} -lt 9 ]]; then
-         color_space="STANDARD"
-         if ((intensity > 0)); then
-            color_space="HIGH"
-            ansi_code=$((ansi_code + 9))
-         elif ((intensity < 0)); then
-            color[ANSI_DIM]=1
-         fi
-      elif [[ ${ansi_code} -lt 17 ]]; then
-         color_space="HIGH"
-         if [[ "${intensity}" == "high" ]]; then
-            color[ANSI_BOLD]=1
-         elif [[ "${intensity}" == "low" ]]; then
-            color_space="STANDARD"
-            ansi_code=$((ansi_code - 9))
-         fi
-      fi
-   fi
-   if [[ -z "${color_space}" ]]; then
+   # Prefix #
+   #  '#' Followed by 6 hex digits - true colors
+   if [[ "$color_code" =~ ^#[0-9a-fA-F]{6}$ ]]; then
+      color_space="TRUE"
+      local hex="${color_code:1}"
+      hex="${hex^^}"
+      local r=$((16#${hex:0:2}))
+      local g=$((16#${hex:2:2}))
+      local b=$((16#${hex:4:2}))
+      ansi_code="$r;$g;$b"
+      #  '#' Followed by 2 hex digits - Extended colors
+   elif [[ "$color_code" =~ ^#[0-9a-fA-F]{2}$ ]]; then
+      color_space="EXTENDED"
+      ansi_code=$((16#${color_code:1:3}))
+      #  '#' Followed by 1 hex digit 0-8, standard colors
+   elif [[ "$color_code" =~ ^#[0-7]$ ]]; then
+      #  '#' Followed by 1 hex digit 9-F, high colors
+      color_space="STANDARD"
+      ansi_code=${color_code:1:2}
+   elif [[ "$color_code" =~ ^#[8-9A-Fa-f]$ ]]; then
+      color_space="HIGH"
+      ansi_code=$((16#${color_code:1:2}))
+      (( ansi_code -= 8))
+   elif [[ "$color_code" =~ ^@[0-9]+$ ]]; then
+      ansi_code="${color_code:1}"
       if [[ ${ansi_code} -lt 256 ]]; then
          color_space="EXTENDED"
       else
          color_space="TRUE"
       fi
+   elif [[ "$color_code" =~ ^[0-9]+$ ]]; then
+      ansi_code="$color_code"
+      if [[ ${ansi_code} -lt 8 || ${ansi_code} -eq 9  ]]; then
+         color_space="STANDARD"
+      elif [[ ${ansi_code} -lt 256 ]]; then
+         color_space="EXTENDED"
+      else
+         color_space="TRUE"
+      fi
    fi
-   # if the color code < 8, color space = standard
+   [[ "${intensity}" -gt 0 ]] && [[ "${color_space}" == "STANDARD" ]] && { color_space="HIGH"; ((intensity--))}
+   [[ "${intensity}" -gt 0 ]] && { color[ANSI_BOLD]=1; ((intensity--))}
+   [[ "${intensity}" -lt 0 ]] && [[ "${color_space}" == "HIGH" ]] && { color_space="STANDARD"; ((intensity++))}
+   [[ "${intensity}" -lt 0 ]] && { color[ANSI_DIM]=1; ((intensity--))}
    if [[ "${color_space}" == "STANDARD" ]]; then
       local base_var="_CPRINTF_ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
       ansi_code="$((ansi_code + ${!base_var}))"
       # if color code < 16, color space = high
    elif [[ "${color_space}" == "HIGH" ]]; then
       local base_var="_CPRINTF_ANSI_${color_plane^^}_HIGH_COLOR_BASE"
-      ansi_code="$(((ansi_code - 9) + ${!base_var}))"
+      ansi_code="$(((ansi_code) + ${!base_var}))"
       # if color code < 255, color space = extended
    elif [[ "${color_space}" == "EXTENDED" ]]; then
       local prefix_var="_CPRINTF_ANSI_${color_plane^^}_EXTENDED_COLOR_PREFIX"
       ansi_code="${!prefix_var}${ansi_code}"
-   else
+   elif [[ -n "${ansi_code}" ]]; then
       local prefix_var="_CPRINTF_ANSI_${color_plane^^}_TRUE_COLOR_PREFIX"
       ansi_code="${!prefix_var}${ansi_code}"
+   else
+      local base_var="_CPRINTF_ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
+      ansi_code="$((9 + ${!base_var}))"
    fi
    color[10]="${ansi_code}"
    for (( i = 0; i < 10; i++ )); do
@@ -127,6 +247,56 @@ function cprintf::add_color_effect() {
 
 }
 
+#-----------------------------------------------------------------------------------------------------------------------
+# Decode HTML entities and output text.
+#
+# Converts common HTML entities to their literal characters before output:
+#   &lt; → <
+#   &gt; → >
+#   &amp; → &
+#
+# Arguments:
+#   $1 - Text string potentially containing HTML entities
+#
+# Output:
+#   Decoded text to stdout
+#-----------------------------------------------------------------------------------------------------------------------
+function cprintf::print() {
+   local _prefix="$1"
+   _prefix="${_prefix//\&lt;/<}"
+   _prefix="${_prefix//\&gt;/>}"
+   _prefix="${_prefix//\&amp;/\&}"
+   printf "%s" "${_prefix}"
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Parse XML-style markup tags and convert to ANSI escape sequences.
+#
+# Processes text containing markup tags for colors and text effects, converting them to ANSI escape codes
+# while maintaining proper nesting and state management. Supports nested tags and inline modifiers.
+#
+# Supported Tags:
+#   Text Effects: <b>, <dim>, <i>, <u>, <blink>, <inv>, <hidden>, <strike>
+#   Colors: <fg:color>, <bg:color>
+#   Closing: </tag> to close any tag
+#
+# Tag Processing:
+#   - Opening tags increment effect/color state
+#   - Closing tags (/) decrement effect/color state
+#   - Text between tags is output with current ANSI state
+#   - HTML entities in text are decoded before output
+#
+# Arguments:
+#   $1 - Text string containing markup tags
+#
+# Output:
+#   Text with ANSI escape sequences to stdout
+#
+# Examples:
+#   cprintf::colorize "<fg:red>Error:</fg> <b>File not found</b>"
+#   cprintf::colorize "<fg:blue!*>Bold italic blue</fg>"
+#   cprintf::colorize "<bg:yellow><fg:black>Warning</fg></bg>"
+#-----------------------------------------------------------------------------------------------------------------------
 function cprintf::colorize() {
    local _text="$1" _prefix _code _inc
 
@@ -136,7 +306,7 @@ function cprintf::colorize() {
 
       [[ ${#_prefix} -gt 0 ]] && {
          cprintf::ansi_seq
-         printf "%s" "${_prefix}"
+         cprintf::print "${_prefix}"
       }
 
       [[ "$_text" != "<"*">"* ]] && break
@@ -159,11 +329,19 @@ function cprintf::colorize() {
          inv) cprintf::add_effect $ANSI_INVERT $_inc ;;
          hidden) cprintf::add_effect $ANSI_HIDDEN $_inc ;;
          strike) cprintf::add_effect $ANSI_STRIKETHROUGH $_inc ;;
-         fg*) cprintf::add_color_effect "fg" $_inc "${_code:3}" ;;
-         bg*) cprintf::add_color_effect "bg" $_inc "${_code:3}" ;;
+         fg*)
+            [[ "$_inc" -gt 0 ]] && cprintf::add_color_effect "fg" "${_code:3}"
+            [[ "$_inc" -lt 0 ]] && cprintf::remove_color_effect "fg"
+            ;;
+         bg*)
+            [[ "$_inc" -gt 0 ]] && cprintf::add_color_effect "bg" "${_code:3}"
+            [[ "$_inc" -lt 0 ]] && cprintf::remove_color_effect "bg"
+            ;;
       esac
    done
 
    cprintf::ansi_seq
-   [[ ${#_text} -gt 0 ]] && printf "%s" "$(echo "${_text}" | sed 's/&lt;/</g; s/&gt;/>/g; s/&amp;/\&/g')"
+   if [[ ${#_text} -gt 0 ]]; then
+      cprintf::print "${_text}"
+   fi
 }
