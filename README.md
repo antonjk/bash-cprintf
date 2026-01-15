@@ -58,7 +58,7 @@ cprintf "<fg:green>Success:</fg> %s\n" "Operation completed"
 ## Supported Tags
 
 - `<fg:color></fg>` - Foreground color
-- `<bg:color></bg>` - Background color  
+- `<bg:color></bg>` - Background color
 - `<b></b>` - Bold text
 - `<i></i>` - Italic text
 - `<u></u>` - Underlined text

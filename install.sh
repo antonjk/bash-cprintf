@@ -40,4 +40,3 @@ rm -rf "$TEMP_DIR"
 echo "bash-cprintf installed successfully!"
 echo "Usage: cprintf '<fg:red>Hello</fg> <b>World</b>'"
 echo "See 'man cprintf' for complete documentation"
-
