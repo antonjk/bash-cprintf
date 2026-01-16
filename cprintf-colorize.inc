@@ -2,7 +2,9 @@ declare -a ACTIVE_STATE=(0 0 0 0 0 0 0 0 0 0 '39' '49')
 declare -a EFFECT_REFCOUNT=(0 0 0 0 0 0 0 0 0 0)
 declare -a FG_STYLE=(0 0 0 0 0 0 0 0 0 0 '39')
 declare -a BG_STYLE=(0 0 0 0 0 0 0 0 0 0 '49')
-
+declare -a STYLES=()
+declare -A TRANSFORMATIONS
+STYLE_SET="DEFAULT"
 ANSI_EFFECT_COUNT=10
 FG_STATE=$((ANSI_EFFECT_COUNT))
 BG_STATE=$((FG_STATE+1))
@@ -72,6 +74,28 @@ function cprintf::ansi_seq() {
 function cprintf::add_effect() {
     ((EFFECT_REFCOUNT[$1] += $2))
     ((EFFECT_REFCOUNT[$1] < 0)) && ((EFFECT_REFCOUNT[$1] = 0))
+}
+
+function cprintf::add_transform() {
+    if [[ -z "${TRANSFORMATIONS[$1]}" ]]; then
+        TRANSFORMATIONS[$1]=0
+    fi
+    ((TRANSFORMATIONS[$1]+=$2))
+    ((TRANSFORMATIONS[$1] == 0)) && unset "TRANSFORMATIONS[$1]"
+}
+
+function cprintf::add_style() {
+    local style_name="STYLE_SET_${STYLE_SET}_${1^^}"
+    local -n style="${style_name}"
+    cprintf::colorize "${style[0]}"
+    styles+=("${style[1]}")
+}
+
+function cprintf::remove_style() {
+    if [[ ${#STYLES[@]} -gt 0 ]]; then
+        cprintf::colorize "${STYLES[-1]}"
+        unset "STYLES[-1]"
+    fi
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -280,11 +304,21 @@ function cprintf::add_color_effect() {
 #   Decoded text to stdout
 #-----------------------------------------------------------------------------------------------------------------------
 function cprintf::print() {
-    local _prefix="$1"
-    _prefix="${_prefix//\&lt;/<}"
-    _prefix="${_prefix//\&gt;/>}"
-    _prefix="${_prefix//\&amp;/\&}"
-    printf "%s" "${_prefix}"
+
+    local text="$1"
+    text="${text//\&lt;/<}"
+    text="${text//\&gt;/>}"
+    text="${text//\&amp;/\&}"
+
+    # Get keys and values
+    for key in "${!TRANSFORMATIONS[@]}"; do
+        case "${key}" in
+        upper) text="${text^^}";;
+        lower) text="${text,,}";;
+        *)
+        esac
+    done
+    printf "%s" "${text}"
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -316,15 +350,15 @@ function cprintf::print() {
 #   cprintf::colorize "<bg:yellow><fg:black>Warning</fg></bg>"
 #-----------------------------------------------------------------------------------------------------------------------
 function cprintf::colorize() {
-    local _text="$1" _prefix _code _inc
+    local _text="$1" text _code _inc
 
     while [[ ${#_text} -gt 0 && "$_text" == *"<"* ]]; do
-        _prefix="${_text%%<*}"
-        _text="${_text:${#_prefix}}"
+        text="${_text%%<*}"
+        _text="${_text:${#text}}"
 
-        [[ ${#_prefix} -gt 0 ]] && {
+        [[ ${#text} -gt 0 ]] && {
             cprintf::ansi_seq
-            cprintf::print "${_prefix}"
+            cprintf::print "${text}"
         }
 
         [[ "$_text" != "<"*">"* ]] && break
@@ -332,13 +366,17 @@ function cprintf::colorize() {
         _code="${_text%%>*}"
         _text="${_text:$((${#_code} + 1))}"
         _code="${_code:1}"
+#        echo "${_code}"
 
         [[ "${_code:0:1}" == "/" ]] && {
             _code="${_code:1}"
             _inc=-1
         } || _inc=1
-
         case ${_code} in
+            @*)
+                [[ "$_inc" -gt 0 ]] && cprintf::add_style "${_code:1}"
+                [[ "$_inc" -lt 0 ]] && cprintf::remove_style
+                ;;
             b) cprintf::add_effect $ANSI_BOLD $_inc ;;
             dim) cprintf::add_effect $ANSI_DIM $_inc ;;
             i) cprintf::add_effect $ANSI_ITALIC $_inc ;;
@@ -347,6 +385,8 @@ function cprintf::colorize() {
             inv) cprintf::add_effect $ANSI_INVERT $_inc ;;
             hidden) cprintf::add_effect $ANSI_HIDDEN $_inc ;;
             strike) cprintf::add_effect $ANSI_STRIKETHROUGH $_inc ;;
+            upper) cprintf::add_transform "${_code}" $_inc        ;;
+            lower) cprintf::add_transform "${_code}" $_inc        ;;
             fg*)
                 [[ "$_inc" -gt 0 ]] && cprintf::add_color_effect "fg" "${_code:3}"
                 [[ "$_inc" -lt 0 ]] && cprintf::remove_color_effect "fg"

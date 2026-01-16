@@ -76,10 +76,11 @@ fi
 # Processor
 . "$SCRIPT_DIR/cprintf-colorize.inc"
 
+. "$SCRIPT_DIR/cprintf-style-sets.inc"
+
 option_prefix="${SCRIPT_DIR}"/cprintf-opt-
 OPT_HELP=""
 for file in "${option_prefix}"*.inc; do
-    echo "${file}"
     header_text="$(grep '^#[?]' "$file" 2>/dev/null | sed 's/^#\?//; s/^[[:space:]]*//' | head -1)"
     OPT_HELP="${OPT_HELP}\n   --${file:${#option_prefix}:-4}\n     ${header_text}\n"
     . "${file}"
