@@ -1,8 +1,11 @@
-declare -a _current_style=(0 0 0 0 0 0 0 0 0 0 '39' '49')
-declare -a _effect_counts=(0 0 0 0 0 0 0 0 0 0)
-declare -a _fg=(0 0 0 0 0 0 0 0 0 0 '39')
-declare -a _bg=(0 0 0 0 0 0 0 0 0 0 '49')
+declare -a ACTIVE_STATE=(0 0 0 0 0 0 0 0 0 0 '39' '49')
+declare -a EFFECT_REFCOUNT=(0 0 0 0 0 0 0 0 0 0)
+declare -a FG_STYLE=(0 0 0 0 0 0 0 0 0 0 '39')
+declare -a BG_STYLE=(0 0 0 0 0 0 0 0 0 0 '49')
 
+ANSI_EFFECT_COUNT=10
+FG_STATE=$((ANSI_EFFECT_COUNT))
+BG_STATE=$((FG_STATE+1))
 #-----------------------------------------------------------------------------------------------------------------------
 # Generate and output ANSI escape sequence based on current style state.
 #
@@ -29,25 +32,26 @@ declare -a _bg=(0 0 0 0 0 0 0 0 0 0 '49')
 #-----------------------------------------------------------------------------------------------------------------------
 function cprintf::ansi_seq() {
     local ansi_seq effects=0
-    for (( e = 1; e < 10; e++ )); do
-        ((_effect_counts[e] > 0 && _current_style[e] == 0)) && {
-            _current_style[e]=1
+    for (( e = 1; e < ANSI_EFFECT_COUNT; e++ )); do
+        ((EFFECT_REFCOUNT[e] > 0 && ACTIVE_STATE[e] == 0)) && {
+            ACTIVE_STATE[e]=1
             ansi_seq+=";$e"
         }
-        ((effects += _current_style[e]))
-        ((_effect_counts[e] == 0 && _current_style[e] > 0)) && {
-            _current_style[e]=0
-            ansi_seq+=";${_CPRINTF_ANSI_DISABLE_EFFECT_PREFIX}$e"
+        ((effects += ACTIVE_STATE[e]))
+        ((EFFECT_REFCOUNT[e] == 0 && ACTIVE_STATE[e] > 0)) && {
+            ACTIVE_STATE[e]=0
+            [[ $e == 1 ]] && ansi_seq+=";${ANSI_DISABLE_EFFECT_PREFIX}2"
+            [[ $e -gt 1 ]] && ansi_seq+=";${ANSI_DISABLE_EFFECT_PREFIX}$e"
         }
 
     done
-    [[ "${_current_style[10]}" != "${_fg[-1]}" ]] && {
-        ansi_seq+=";${_fg[-1]}"
-        _current_style[10]="${_fg[-1]}"
+    [[ "${ACTIVE_STATE[$FG_STATE]}" != "${FG_STYLE[-1]}" ]] && {
+        ansi_seq+=";${FG_STYLE[-1]}"
+        ACTIVE_STATE[$FG_STATE]="${FG_STYLE[-1]}"
     }
-    [[ "${_current_style[11]}" != "${_bg[-1]}" ]] && {
-        ansi_seq+=";${_bg[-1]}"
-        _current_style[11]="${_bg[-1]}"
+    [[ "${ACTIVE_STATE[$BG_STATE]}" != "${BG_STYLE[-1]}" ]] && {
+        ansi_seq+=";${BG_STYLE[-1]}"
+        ACTIVE_STATE[$BG_STATE]="${BG_STYLE[-1]}"
     }
     [[ -n "${ansi_seq}" ]] && printf "%b[%bm" "${ANSI_ESC}" "${ansi_seq:1}"
 }
@@ -66,8 +70,8 @@ function cprintf::ansi_seq() {
 #   _effect_counts - Array of reference counts for each effect
 #-----------------------------------------------------------------------------------------------------------------------
 function cprintf::add_effect() {
-    ((_effect_counts[$1] += $2))
-    ((_effect_counts[$1] < 0)) && ((_effect_counts[$1] = 0))
+    ((EFFECT_REFCOUNT[$1] += $2))
+    ((EFFECT_REFCOUNT[$1] < 0)) && ((EFFECT_REFCOUNT[$1] = 0))
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -88,20 +92,23 @@ function cprintf::add_effect() {
 function cprintf::remove_color_effect() {
     local color_plane="$1"
 
-    if [[ "$color_plane" == "fg" && ${#_fg[@]} -gt 11 ]]; then
-        local offset=$((${#_fg[@]} - 11))
+    if [[ "$color_plane" == "fg" && ${#FG_STYLE[@]} -gt 11 ]]; then
+        local offset=$((${#FG_STYLE[@]} - 11))
         for (( i = 0; i < 10; i++ )); do
-            ((_effect_counts[i] -= ${_fg[offset + i]}))
+            ((EFFECT_REFCOUNT[i] -= ${FG_STYLE[offset + i]}))
         done
-    elif [[ "$color_plane" == "bg" && ${#_bg[@]} -gt 11 ]]; then
-        local offset=$((${#_bg[@]} - 11))
+        for (( i = 0; i < 11; i++ )); do
+            unset "FG_STYLE[-1]"
+        done
+    elif [[ "$color_plane" == "bg" && ${#BG_STYLE[@]} -gt 11 ]]; then
+        local offset=$((${#BG_STYLE[@]} - 11))
         for (( i = 0; i < 10; i++ )); do
-            ((_effect_counts[i] -= _bg[offset + i]))
+            ((EFFECT_REFCOUNT[i] -= BG_STYLE[offset + i]))
+        done
+        for (( i = 0; i < 11; i++ )); do
+            unset "BG_STYLE[-1]"
         done
     fi
-    for (( i = 0; i < 11; i++ )); do
-        unset "_${color_plane}[-1]"
-    done
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
@@ -142,10 +149,10 @@ function cprintf::remove_color_effect() {
 #   _fg - Foreground color stack
 #   _bg - Background color stack
 #   _effect_counts - Effect reference counts
-#   __CPRINTF_ANSI_COLOR_ALIASES__ - Color name to code mapping
+#   _ANSI_COLOR_ALIASES__ - Color name to code mapping
 #   ANSI_* - Effect index constants
-#   _CPRINTF_ANSI_*_COLOR_BASE - Base codes for standard/high colors
-#   _CPRINTF_ANSI_*_COLOR_PREFIX - Prefixes for extended/true colors
+#   ANSI_*_COLOR_BASE - Base codes for standard/high colors
+#   ANSI_*_COLOR_PREFIX - Prefixes for extended/true colors
 #-----------------------------------------------------------------------------------------------------------------------
 function cprintf::add_color_effect() {
     local color_plane="$1"
@@ -154,7 +161,6 @@ function cprintf::add_color_effect() {
     local ansi_code
     local intensity=0
     local color=(0 0 0 0 0 0 0 0 0 0 "")
-
     while [[ ${#color_code} -gt 1 ]]; do
         case ${color_code: -1} in
             \+) ((intensity += 1)) ;;
@@ -165,7 +171,7 @@ function cprintf::add_color_effect() {
             =) ((color[ANSI_STRIKETHROUGH] = 1)) ;;
             \~) ((color[ANSI_INVERT] = 1)) ;;
             *)
-                lookup="${__CPRINTF_ANSI_COLOR_ALIASES__[${color_code}]}"
+                lookup="${ANSI_COLOR_ALIAS[${color_code}]}"
                 if [[ -n "${lookup}" ]]; then
                     color_code="${lookup}"
                     continue
@@ -233,29 +239,29 @@ function cprintf::add_color_effect() {
         ((intensity--))
     }
     if [[ "${color_space}" == "STANDARD" ]]; then
-        local base_var="_CPRINTF_ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
+        local base_var="ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
         ansi_code="$((ansi_code + ${!base_var}))"
         # if color code < 16, color space = high
     elif [[ "${color_space}" == "HIGH" ]]; then
-        local base_var="_CPRINTF_ANSI_${color_plane^^}_HIGH_COLOR_BASE"
+        local base_var="ANSI_${color_plane^^}_HIGH_COLOR_BASE"
         ansi_code="$(((ansi_code) + ${!base_var}))"
         # if color code < 255, color space = extended
     elif [[ "${color_space}" == "EXTENDED" ]]; then
-        local prefix_var="_CPRINTF_ANSI_${color_plane^^}_EXTENDED_COLOR_PREFIX"
+        local prefix_var="ANSI_${color_plane^^}_EXTENDED_COLOR_PREFIX"
         ansi_code="${!prefix_var}${ansi_code}"
     elif [[ -n "${ansi_code}" ]]; then
-        local prefix_var="_CPRINTF_ANSI_${color_plane^^}_TRUE_COLOR_PREFIX"
+        local prefix_var="ANSI_${color_plane^^}_TRUE_COLOR_PREFIX"
         ansi_code="${!prefix_var}${ansi_code}"
     else
-        local base_var="_CPRINTF_ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
+        local base_var="ANSI_${color_plane^^}_STANDARD_COLOR_BASE"
         ansi_code="$((9 + ${!base_var}))"
     fi
     color[10]="${ansi_code}"
     for (( i = 0; i < 10; i++ )); do
-        ((_effect_counts[i] += color[i]))
+        ((EFFECT_REFCOUNT[i] += color[i]))
     done
-    [[ "${color_plane}" == "fg" ]] && _fg+=(${color[@]})
-    [[ "${color_plane}" == "bg" ]] && _bg+=(${color[@]})
+    [[ "${color_plane}" == "fg" ]] && FG_STYLE+=(${color[@]})
+    [[ "${color_plane}" == "bg" ]] && BG_STYLE+=(${color[@]})
 
 }
 

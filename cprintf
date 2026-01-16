@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Get script directory (handle symlinks)
-if [[ -L "${BASH_SOURCE[0]}" ]]; then
-    SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-else
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fi
 ########################################################################################################################
 ## Colored Printf (cprintf) - Formatted output with colors and styles
 ##
@@ -62,121 +56,37 @@ fi
 ########################################################################################################################
 # If the file is sourced, prevent it from getting sourced multiple times
 [[ "$0" != "${BASH_SOURCE[0]}" && -n "${__CPRINTF_INC_SOURCED__:-}" ]] && return
-__CPRINTF_INC_SOURCED__=1
+[[ "$0" != "${BASH_SOURCE[0]}" ]] && __CPRINTF_INC_SOURCED__=1
 
-# Escape code
-ANSI_ESC=$'\033'
+# Get script directory (handle symlinks)
+if [[ -L "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
-# Text effects (SGR codes)
-ANSI_BOLD=1          # Bold/bright text
-ANSI_DIM=2           # Dim/faint text
-ANSI_ITALIC=3        # Italic text
-ANSI_UNDERLINE=4     # Underlined text
-ANSI_BLINK=5         # Blinking text
-ANSI_INVERT=7        # Inverted foreground/background
-ANSI_HIDDEN=8        # Hidden/invisible text
-ANSI_STRIKETHROUGH=9 #< Strikethrough text
+##################################################################################
+# INCLUDES - Start
+##################################################################################
+. "$SCRIPT_DIR/cprintf-ansi.inc"
 
-_CPRINTF_ANSI_DISABLE_EFFECT_PREFIX="2" # Disable effect
+# Aliases
+. "$SCRIPT_DIR/cprintf-color-aliases.inc"
 
-# Extended color prefixes (256-color and true color)
-_CPRINTF_ANSI_FG_EXTENDED_COLOR_PREFIX="38;5;" # 256-color foreground prefix
-_CPRINTF_ANSI_BG_EXTENDED_COLOR_PREFIX="48;5;" # 256-color background prefix
-_CPRINTF_ANSI_FG_TRUE_COLOR_PREFIX="38;2;"     # True color foreground prefix
-_CPRINTF_ANSI_BG_TRUE_COLOR_PREFIX="48;2;"     # True color background prefix
+# Processor
+. "$SCRIPT_DIR/cprintf-colorize.inc"
 
-# Standard and high-intensity color bases
-_CPRINTF_ANSI_FG_STANDARD_COLOR_BASE=30 # Standard foreground colors (30-37)
-_CPRINTF_ANSI_BG_STANDARD_COLOR_BASE=40 # Standard background colors (40-47)
-_CPRINTF_ANSI_FG_HIGH_COLOR_BASE=90     # High-intensity foreground colors (90-97)
-_CPRINTF_ANSI_BG_HIGH_COLOR_BASE=100    # High-intensity background colors (100-107)
-
-#-----------------------------------------------------------------------------------------------------------------------
-# Convert color name/code with modifiers to ANSI escape sequence.
-#
-# Converts color specifications (names, letters, numbers) with optional inline effect modifiers
-# into proper ANSI escape codes. Handles multiple color spaces and supports combining multiple
-# text effects in a single color specification. Uses predefined __CPRINTF_ANSI_COLOR_ALIASES__ for lookups.
-#
-# Modifier Processing:
-#   Processes modifiers from right to left, allowing multiple effects to be combined.
-#   Supports intensity modifiers (+/-) and direct effect modifiers (!*_~).
-#   Each modifier is stripped and its effect accumulated before processing the base color.
-#
-# Supported Modifiers:
-#   +  High intensity (converts to bright color or adds bold effect)
-#   -  Low intensity (adds dim effect or converts to standard color)
-#   !  Bold text effect (ANSI code 1)
-#   *  Italic text effect (ANSI code 3)
-#   _  Underline text effect (ANSI code 4)
-#   ~  Invert/reverse video effect (ANSI code 7)
-#   =  Strikethrough text effect (ANSI code 9)
-#
-# Color Processing:
-#   1. Extracts all trailing modifiers from color specification
-#   2. Resolves base color name/letter to numeric code via __CPRINTF_ANSI_COLOR_ALIASES__
-#   3. Applies intensity effects based on color space and +/- modifiers
-#   4. Combines all effect codes with appropriate color code
-#   5. Formats final ANSI sequence with proper prefix for color space
-#
-# Arguments:
-#   $1 - Color plane: "fg" (foreground) or "bg" (background)
-#   $2 - Color specification with optional modifiers
-#        Examples: "red", "b!_", "196*", "red+!*_=", "A-~"
-#
-# Returns:
-#   ANSI escape sequence fragment (without ESC[ prefix or 'm' suffix)
-#   Format: [effect1;effect2;...]colorcode where effects are optional
-#
-# Examples:
-#   color_ansi_code "fg" "red"      # Returns: "31"
-#   color_ansi_code "bg" "blue+"    # Returns: "104"
-#   color_ansi_code "fg" "b!_"      # Returns: "1;4;31" (bold underline black)
-#   color_ansi_code "fg" "196*~"    # Returns: "3;7;38;5;196" (italic invert 256-color)
-#   color_ansi_code "fg" "red=!"     # Returns: "9;1;31" (strikethrough bold red)
-#-----------------------------------------------------------------------------------------------------------------------
-declare -A __CPRINTF_ANSI_COLOR_ALIASES__
-__CPRINTF_ANSI_COLOR_ALIASES__['black']=0
-__CPRINTF_ANSI_COLOR_ALIASES__['red']=1
-__CPRINTF_ANSI_COLOR_ALIASES__['green']=2
-__CPRINTF_ANSI_COLOR_ALIASES__['yellow']=3
-__CPRINTF_ANSI_COLOR_ALIASES__['blue']=4
-__CPRINTF_ANSI_COLOR_ALIASES__['magenta']=5
-__CPRINTF_ANSI_COLOR_ALIASES__['cyan']=6
-__CPRINTF_ANSI_COLOR_ALIASES__['white']=7
-__CPRINTF_ANSI_COLOR_ALIASES__['default']=9
-
-__CPRINTF_ANSI_COLOR_ALIASES__['Black']='0+'
-__CPRINTF_ANSI_COLOR_ALIASES__['Red']='1+'
-__CPRINTF_ANSI_COLOR_ALIASES__['Green']='2+'
-__CPRINTF_ANSI_COLOR_ALIASES__['Yellow']='3+'
-__CPRINTF_ANSI_COLOR_ALIASES__['Blue']='4+'
-__CPRINTF_ANSI_COLOR_ALIASES__['Magenta']='5+'
-__CPRINTF_ANSI_COLOR_ALIASES__['Cyan']='6+'
-__CPRINTF_ANSI_COLOR_ALIASES__['White']='7+'
-
-# Shell config colors
-__CPRINTF_ANSI_COLOR_ALIASES__['a']=0
-__CPRINTF_ANSI_COLOR_ALIASES__['b']=1
-__CPRINTF_ANSI_COLOR_ALIASES__['c']=2
-__CPRINTF_ANSI_COLOR_ALIASES__['d']=3
-__CPRINTF_ANSI_COLOR_ALIASES__['e']=4
-__CPRINTF_ANSI_COLOR_ALIASES__['f']=5
-__CPRINTF_ANSI_COLOR_ALIASES__['g']=6
-__CPRINTF_ANSI_COLOR_ALIASES__['h']=7
-__CPRINTF_ANSI_COLOR_ALIASES__['x']=8
-__CPRINTF_ANSI_COLOR_ALIASES__['A']=9
-__CPRINTF_ANSI_COLOR_ALIASES__['B']=10
-__CPRINTF_ANSI_COLOR_ALIASES__['C']=11
-__CPRINTF_ANSI_COLOR_ALIASES__['D']=12
-__CPRINTF_ANSI_COLOR_ALIASES__['E']=13
-__CPRINTF_ANSI_COLOR_ALIASES__['F']=14
-__CPRINTF_ANSI_COLOR_ALIASES__['G']=15
-__CPRINTF_ANSI_COLOR_ALIASES__['H']=16
-__CPRINTF_ANSI_COLOR_ALIASES__['X']=8
-__CPRINTF_ANSI_COLOR_ALIASES__['thing']='red!'
-
-. "$SCRIPT_DIR/cprintf.colorize-2.0"
+option_prefix="${SCRIPT_DIR}"/cprintf-opt-
+OPT_HELP=""
+for file in "${option_prefix}"*.inc; do
+    echo "${file}"
+    header_text="$(grep '^#[?]' "$file" 2>/dev/null | sed 's/^#\?//; s/^[[:space:]]*//' | head -1)"
+    OPT_HELP="${OPT_HELP}\n   --${file:${#option_prefix}:-4}\n     ${header_text}\n"
+    . "${file}"
+done
+##################################################################################
+# INCLUDES - End
+##################################################################################
 
 cprintf::show-help() {
     cprintf "<fg:white+><b>NAME</b></fg>
@@ -191,33 +101,13 @@ cprintf::show-help() {
 
     Output text with colors and effects.
 
-<fg:white+><b>OPTIONS</b></fg>\n\n
-"
-    local prefix=""${SCRIPT_DIR}"/cprintf."
-    local help_text
-    for file in "$prefix"*.inc; do
-        help_text="$(grep '^#[?]' "$file" 2>/dev/null | sed 's/^#\?//; s/^[[:space:]]*//' | head -1)"
-        cprintf "   --%s\n      %s\n" "${file:${#prefix}:-4}" "${help_text}"
-    done
-
-    cprintf "   -h --help
-      Display this message
+<fg:white+><b>OPTIONS</b></fg>
+${OPT_HELP}
+    -h --help
+       Display this message
 \n"
 }
 
-cprintf::check-color-support-opt() {
-    # Check number of colors supported
-    colors=$(tput colors 2>/dev/null)
-    # Not a terminal
-    if [[ ! -t 1 ]]; then
-        colors=0
-    fi
-    [[ $colors -ge 8 ]] && echo "8"
-    [[ $colors -ge 16 ]] && echo "16"
-    [[ $colors -ge 256 ]] && echo "256"
-    # Check for true color (24-bit)
-    [[ $COLORTERM == "truecolor" || $COLORTERM == "24bit" ]] && echo "24Bit"
-}
 #-----------------------------------------------------------------------------------------------------------------------
 # Formatted output with color and style markup to stdout.
 #
@@ -244,18 +134,15 @@ cprintf::check-color-support-opt() {
 #   cprintf "<fg:red!*>Bold italic red text</fg>\n"
 #   cprintf "<fg:196_~>Underlined inverted 256-color</fg>\n"
 #   cprintf "<fg:blue=*>Strikethrough italic blue</fg>\n"
-#
-# See Also:
-#   ceprintf() - Same functionality but outputs to stderr
-#   colorize() - Underlying markup processing function
-#   color_ansi_code() - Color and modifier processing
 #-----------------------------------------------------------------------------------------------------------------------
 function cprintf() {
     local template
+    local arg=""
+    [[ "$1" == "--" ]] && arg="--" && shift
     template="$(cprintf::colorize "$1")"
     #template="$1"
     shift
-    printf "${template}" "$@"
+    printf -- $arg "${template}" "$@"
 }
 
 # If we are not sourced, run
@@ -274,20 +161,17 @@ if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
                 cprintf::show-help
                 exit 0
                 ;;
+            --)
+                break
+                ;;
             --*)
-                function_name="cprintf::${1:2}-opt"
+                function_name="cprintf::opt::${key:2}"
                 if declare -f "$function_name" >/dev/null; then
                     shift
                     "$function_name" "$@"
                     exit
                 fi
-                include_file="$SCRIPT_DIR/cprintf.${1:2}.inc"
-                if [[ -f "${include_file}" ]]; then
-                    shift
-                    . "${include_file}"
-                else
-                    cprintf "<fg:red>Unsupported command - %s</fg>" "$1"
-                fi
+                break
                 ;;
             *)
                 break
@@ -303,4 +187,5 @@ if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
         exit 0
     fi
     cprintf "$@"
+    printf "%b[0m" "${ANSI_ESC}"
 fi
