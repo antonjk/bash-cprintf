@@ -1,0 +1,374 @@
+#!/usr/bin/env bash
+########################################################################################################################
+## mdterm - Markdown Terminal Renderer
+##
+## Renders a subset of markdown syntax with terminal colors and formatting using cprintf.
+## Converts markdown headings, emphasis, code blocks, and underlines to styled terminal output.
+##
+## Supported Markdown Syntax:
+##   # Heading 1        - Rendered with H1 style (cyan+)
+##   ## Heading 2       - Rendered with H2 style (yellow+)
+##   ### Heading 3      - Rendered with H3 style (magenta)
+##   #### Heading 4     - Rendered with H4 style (white+)
+##   *italic*           - Rendered with italic style
+##   **bold**           - Rendered with bold style
+##   ***bold italic***  - Rendered with bold+italic style
+##   `code`             - Inline code (green on black)
+##   _underline_        - Rendered with underline style
+##   ```lang            - Fenced code blocks (syntax highlighted with bat if available)
+##   code
+##   ```
+##
+## Code Block Rendering:
+##   If 'bat' is installed, fenced code blocks are rendered with syntax highlighting.
+##   Otherwise, code blocks use the default code style (green on black).
+##   Inline code (`code`) always uses the default style.
+##
+## Style Combinations:
+##   Styles can be nested: _*italic underline*_, _**bold underline**_
+##   Processing order: code, ***, **, *, _
+##
+## Usage:
+##   mdterm "# Title\nSome *italic* text"     - From arguments
+##   echo "# Title" | mdterm                   - From stdin
+##   mdterm -f file.md                        - From file
+##
+## Dependencies:
+##   Required: cprintf (must be in PATH or same directory)
+##   Optional: bat (for syntax-highlighted code blocks)
+##
+## Examples:
+##   mdterm "# Hello World\n**Bold** and *italic* text"
+##   cat README.md | mdterm
+##   mdterm -f doc1.md doc2.md
+########################################################################################################################
+# If the file is sourced, prevent it from getting sourced multiple times
+[[ "$0" != "${BASH_SOURCE[0]}" && -n "${__MD_LITE_INC_SOURCED__:-}" ]] && return
+[[ "$0" != "${BASH_SOURCE[0]}" ]] && __MD_LITE_INC_SOURCED__=1
+
+declare -a MD_STYLE_H1=('<@h1>' '</@>')
+declare -a MD_STYLE_H2=('<@h2>' '</@>')
+declare -a MD_STYLE_H3=('<@h3>' '</@>')
+declare -a MD_STYLE_H4=('<@h4>' '</@>')
+declare -a MD_STYLE_UNDERLINE=('<u>' '</u>') # _text_
+declare -a MD_STYLE_EM1=('<@em1>' '</@>')    # *text*
+declare -a MD_STYLE_EM2=('<@em2>' '</@>')    # **text**
+declare -a MD_STYLE_EM3=('<@em3>' '</@>')    # ***text***
+declare -a MD_STYLE_CODE=('<@code>' '</@>')  # `code`
+BAT_ARGS="-p --color=always"
+
+# Get script directory (handle symlinks)
+if [[ -L "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+. "${SCRIPT_DIR}/cprintf"
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Render fenced code blocks with syntax highlighting.
+#
+# Uses bat for syntax highlighting if available, otherwise falls back to default code style.
+# Adds a newline before bat output for proper spacing.
+#
+# Arguments:
+#   $1 - Language identifier for syntax highlighting (e.g., "bash", "python", "auto")
+#   $2 - Code block content to render
+#
+# Output:
+#   Syntax-highlighted code block to stdout (via bat or cprintf)
+#
+# Examples:
+#   mdterm::bat "bash" "echo 'hello'"    → Syntax-highlighted bash code
+#   mdterm::bat "auto" "some code"       → Auto-detected syntax highlighting
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::bat() {
+    if command -v bat &>/dev/null; then
+        printf '\n'
+        printf "%b" "$2" | bat -l "$1" ${BAT_ARGS}
+    else
+        mdterm::printf "${MD_STYLE_CODE[0]}\n${2}${MD_STYLE_CODE[1]}"
+    fi
+}
+
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Display help message with formatted output.
+#
+# Shows usage, supported markdown syntax, options, and examples using cprintf for styling.
+# Called when -h or --help option is provided.
+#
+# Output:
+#   Formatted help text to stdout
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::show-help() {
+    cprintf "<fg:white+><b>NAME</b></fg>
+
+    ${0##*/} - Markdown Terminal Renderer
+
+<fg:white+><b>SYNOPSIS</b></fg>
+
+    ${0##*/} [<i>text</i>]
+    ${0##*/} <b>-f</b> <i>file</i> [<i>file</i>...]
+    ${0##*/} <b>--file</b> <i>file</i> [<i>file</i>...]
+    <i>command</i> | ${0##*/}
+
+<fg:white+><b>DESCRIPTION</b></fg>
+
+    Renders markdown syntax with terminal colors and formatting.
+    Supports headings, emphasis, inline code, code blocks, and underline.
+
+<fg:white+><b>SUPPORTED MARKDOWN</b></fg>
+
+    <b>#</b> Heading 1        H1 style (cyan+)
+    <b>##</b> Heading 2       H2 style (yellow+)
+    <b>###</b> Heading 3      H3 style (magenta)
+    <b>####</b> Heading 4     H4 style (white+)
+    <b>*</b>italic<b>*</b>           Italic text
+    <b>**</b>bold<b>**</b>           Bold text
+    <b>***</b>bold italic<b>***</b>  Bold + italic
+    <b>\`</b>code<b>\`</b>             Inline code (green on black)
+    <b>_</b>underline<b>_</b>        Underlined text
+    <b>\`\`\`</b>lang            Fenced code blocks (syntax highlighted with bat)
+    code
+    <b>\`\`\`</b>
+
+<fg:white+><b>CODE BLOCKS</b></fg>
+
+    Fenced code blocks (\`\`\`lang...\`\`\`) are rendered with syntax
+    highlighting if 'bat' is installed. Otherwise, they use the
+    default code style. Inline code always uses the default style.
+
+<fg:white+><b>OPTIONS</b></fg>
+
+    <b>-f</b>, <b>--file</b> <i>file</i>
+        Read from file(s). Once specified, all remaining arguments
+        are treated as file paths.
+
+    <b>--bat-args</b> <i>\"args\"</i>
+        Additional arguments to pass to bat for code block rendering.
+        Default: \"-p --color=always\"
+
+    <b>-h</b>, <b>--help</b>
+        Display this help message
+
+<fg:white+><b>EXAMPLES</b></fg>
+
+    Render text from arguments:
+        ${0##*/} \"# Title\\nSome <b>*</b>italic<b>*</b> text\"
+
+    Render from stdin:
+        echo \"# Title\" | ${0##*/}
+        cat README.md | ${0##*/}
+
+    Render from file(s):
+        ${0##*/} -f README.md
+        ${0##*/} -f file1.md file2.md file3.md
+
+    Use custom bat theme:
+        ${0##*/} --bat-args \"--theme=Dracula --style=numbers\" -f code.md
+\n"
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Process markdown inline formatting and convert to cprintf markup.
+#
+# Recursively processes markdown inline syntax (code, emphasis, underline) and converts to
+# corresponding cprintf style tags. Processes in order: code, ***, **, *, _ to handle nesting.
+#
+# Processing Order:
+#   1. `code` - Inline code blocks
+#   2. ***text*** - Bold italic emphasis
+#   3. **text** - Bold emphasis
+#   4. *text* - Italic emphasis
+#   5. _text_ - Underline
+#
+# Arguments:
+#   $1 - Text string with markdown inline syntax
+#
+# Output:
+#   Text with cprintf markup tags to stdout
+#
+# Examples:
+#   mdterm::processFragment "*italic* text"           → "<@em1>italic</@> text"
+#   mdterm::processFragment "**bold** text"           → "<@em2>bold</@> text"
+#   mdterm::processFragment "`code` block"            → "<@code>code</@> block"
+#   mdterm::processFragment "_*underline italic*_"    → "<u><@em1>underline italic</@></u>"
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::processFragment() {
+    local patterns=(
+        '\`([^\`]+)\`' 'MD_STYLE_CODE'
+        '\*{3}([^*]+)\*{3}' 'MD_STYLE_EM3'
+        '\*{2}([^*]+)\*{2}' 'MD_STYLE_EM2'
+        '\*([^*]+)\*' 'MD_STYLE_EM1'
+        '_([^_]+)_' 'MD_STYLE_UNDERLINE'
+    )
+
+    for ((i = 0; i < ${#patterns[@]}; i += 2)); do
+        if [[ "$1" =~ (.*)${patterns[i]}(.*) ]]; then
+            local style_name="${patterns[i + 1]}"
+            local -n style="$style_name"
+            mdterm::processFragment "${BASH_REMATCH[1]}${style[0]}$(mdterm::processFragment "${BASH_REMATCH[2]}")${style[1]}${BASH_REMATCH[3]}"
+            return
+        fi
+    done
+    printf -- "%b" "$1"
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Process a single line of markdown and convert to cprintf markup.
+#
+# Detects markdown heading syntax (# ## ### ####) and wraps content with appropriate style tags.
+# Non-heading lines are processed for inline formatting only.
+#
+# Heading Detection:
+#   # text    - H1 heading (cyan+)
+#   ## text   - H2 heading (yellow+)
+#   ### text  - H3 heading (magenta)
+#   #### text - H4 heading (white+)
+#
+# Arguments:
+#   $1 - Single line of markdown text
+#
+# Output:
+#   Formatted line with cprintf markup to stdout
+#
+# Examples:
+#   mdterm::processLine "# Title"              → "<@h1>Title</@>\n"
+#   mdterm::processLine "## Section"           → "<@h2>Section</@>\n"
+#   mdterm::processLine "Regular *italic* text" → "Regular <@em1>italic</@> text"
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::processLine() {
+    local line="$1"
+
+    # Process headings
+    if [[ "$line" =~ ^####[[:space:]](.+)$ ]]; then
+        printf "${MD_STYLE_H4[0]}$(mdterm::processFragment "${BASH_REMATCH[1]}")${MD_STYLE_H4[1]}"
+    elif [[ "$line" =~ ^###[[:space:]](.+)$ ]]; then
+        printf "${MD_STYLE_H3[0]}$(mdterm::processFragment "${BASH_REMATCH[1]}")${MD_STYLE_H3[1]}"
+    elif [[ "$line" =~ ^##[[:space:]](.+)$ ]]; then
+        printf "${MD_STYLE_H2[0]}$(mdterm::processFragment "${BASH_REMATCH[1]}")${MD_STYLE_H2[1]}"
+    elif [[ "$line" =~ ^#[[:space:]](.+)$ ]]; then
+        printf "${MD_STYLE_H1[0]}$(mdterm::processFragment "${BASH_REMATCH[1]}")${MD_STYLE_H1[1]}"
+    else
+        mdterm::processFragment "$1"
+    fi
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Wrapper for cprintf to output formatted text.
+#
+# Passes all arguments directly to cprintf for rendering.
+#
+# Arguments:
+#   $@ - All arguments passed to cprintf
+#
+# Output:
+#   Formatted output via cprintf to stdout
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::printf() {
+    cprintf "$@"
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Render complete markdown document with inline and block-level formatting.
+#
+# Processes markdown line by line, handling fenced code blocks and inline formatting.
+# Code blocks are detected by ``` markers and rendered with syntax highlighting if bat is available.
+# Non-code lines are processed for headings and inline formatting.
+#
+# Arguments:
+#   $1 - Complete markdown text to render
+#
+# Output:
+#   Fully formatted markdown to stdout
+#
+# Examples:
+#   mdterm::render "# Title\nSome text"              → Formatted output
+#   mdterm::render "\`\`\`bash\necho hi\n\`\`\`"    → Syntax-highlighted code block
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::render() {
+    local code_lang=""
+    local code_block=""
+    while IFS= read -r line; do
+        if [[ "${line}" =~ [:space:]*\`\`\`(.*) ]]; then
+            if [[ -z "${code_lang}" ]]; then
+                code_lang="${BASH_REMATCH[1]:-auto}"
+            else
+                mdterm::bat "${code_lang}" "${code_block:2}"
+                code_lang=""
+                code_block=""
+            fi
+        elif [[ -n "${code_lang}" ]]; then
+            code_block="${code_block}\n${line}"
+            continue
+        else
+            mdterm::printf "$(mdterm::processLine "${line}")\n"
+        fi
+    done <<<"$1"
+}
+
+[[ "$0" != "${BASH_SOURCE[0]}" ]] && return
+
+if [[ $# -eq 0 && ! -t 0 ]]; then
+    mdterm::render "$(cat)"
+    exit 0
+fi
+
+declare -a FILES=()
+#-----------------------------------------------------------------------------------------------------------------------
+# Add file to FILES array for processing.
+#
+# Validates file exists before adding. Exits with error if file not found.
+#
+# Arguments:
+#   $1 - File path to add
+#
+# Exits:
+#   1 if file does not exist
+#-----------------------------------------------------------------------------------------------------------------------
+function mdterm::add_file() {
+    [[ -f "$1" ]] || {
+        echo "File not found: $1" >&2
+        exit 1
+    }
+    FILES+=("$1")
+}
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h | --help)
+            mdterm::show-help
+            exit 0
+            ;;
+        --bat-args)
+            BAT_ARGS="$2"
+            shift
+            ;;
+        -f | --file)
+            mdterm::add_file "$2"
+            shift
+            ;;
+        *)
+            [[ ${#FILES[@]} -eq 0 ]] && break
+            mdterm::add_file $1
+            ;;
+    esac
+    shift
+done
+
+[[ ${#FILES[@]} -eq 0 ]] && [[ $# -eq 0 ]] && {
+    echo "mdterm - Markdown Terminal Renderer"
+    echo "Usage: mdterm [options]"
+    echo "'mdterm -h' for options."
+    echo "See 'man mdterm' for complete documentation"
+    exit 1
+}
+
+if [[ ${#FILES[@]} -gt 0 ]]; then
+    for file in "${FILES[@]}"; do
+        mdterm::render "$(cat "$file")"
+    done
+else
+    mdterm::render "$*"
+fi

@@ -1,0 +1,144 @@
+.TH MDTERM 1 "2024" "mdterm 1.0" "User Commands"
+.SH NAME
+mdterm \- Markdown Terminal Renderer
+.SH SYNOPSIS
+.B mdterm
+[\fItext\fR]
+.br
+.B mdterm
+.B \-f
+.I file
+[\fIfile\fR...]
+.br
+.B mdterm
+.B \-\-file
+.I file
+[\fIfile\fR...]
+.br
+.I command
+|
+.B mdterm
+.SH DESCRIPTION
+.B mdterm
+renders markdown syntax with terminal colors and formatting using cprintf.
+It converts markdown headings, emphasis, inline code, code blocks, and underlines
+to styled terminal output.
+.PP
+The tool supports reading from command line arguments, standard input, or files.
+Code blocks can be syntax-highlighted using
+.BR bat (1)
+if available.
+.SH SUPPORTED MARKDOWN
+.TP
+.B # Heading 1
+Rendered with H1 style (cyan+)
+.TP
+.B ## Heading 2
+Rendered with H2 style (yellow+)
+.TP
+.B ### Heading 3
+Rendered with H3 style (magenta)
+.TP
+.B #### Heading 4
+Rendered with H4 style (white+)
+.TP
+.B *italic*
+Rendered with italic style
+.TP
+.B **bold**
+Rendered with bold style
+.TP
+.B ***bold italic***
+Rendered with bold + italic style
+.TP
+.B `code`
+Inline code (green on black)
+.TP
+.B _underline_
+Rendered with underline style
+.TP
+.B ```lang
+Fenced code blocks with optional syntax highlighting
+.SH OPTIONS
+.TP
+.BR \-f ", " \-\-file " \fIfile\fR"
+Read from file(s). Once specified, all remaining arguments are treated as file paths.
+Multiple files can be specified and will be rendered sequentially.
+.TP
+.BI \-\-bat\-args " \"args\""
+Additional arguments to pass to
+.BR bat (1)
+for code block rendering.
+Default: "\-p \-\-color=always"
+.TP
+.BR \-h ", " \-\-help
+Display help message and exit
+.SH CODE BLOCKS
+Fenced code blocks (```lang...```) are rendered with syntax highlighting if
+.BR bat (1)
+is installed. The language identifier after the opening backticks determines
+the syntax highlighting language. If
+.B bat
+is not available, code blocks use the default code style (green on black).
+Inline code always uses the default style regardless of
+.B bat
+availability.
+.SH STYLE COMBINATIONS
+Styles can be nested for combined effects:
+.PP
+.RS
+.B _*italic underline*_
+.br
+.B _**bold underline**_
+.RE
+.PP
+Processing order: code, ***, **, *, _
+.SH EXAMPLES
+Render text from arguments:
+.RS
+.B mdterm "# Title\\nSome *italic* text"
+.RE
+.PP
+Render from stdin:
+.RS
+.B echo "# Title" | mdterm
+.br
+.B cat README.md | mdterm
+.RE
+.PP
+Render from file(s):
+.RS
+.B mdterm \-f README.md
+.br
+.B mdterm \-f file1.md file2.md file3.md
+.RE
+.PP
+Use custom bat theme:
+.RS
+.B mdterm \-\-bat\-args "\-\-theme=Dracula \-\-style=numbers" \-f code.md
+.RE
+.SH DEPENDENCIES
+.TP
+.B Required
+.BR cprintf (1)
+must be in PATH or in the same directory as mdterm
+.TP
+.B Optional
+.BR bat (1)
+for syntax-highlighted code blocks
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+File not found or invalid usage
+.SH AUTHOR
+Written by Anton Koekemoer
+.SH COPYRIGHT
+MIT License \- see LICENSE file for details.
+.br
+License: MIT License
+.SH SEE ALSO
+.BR cprintf (1),
+.BR bat (1)

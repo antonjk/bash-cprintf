@@ -147,46 +147,46 @@ function cprintf() {
 }
 
 # If we are not sourced, run
-if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then
-    if [[ $# -eq 0 && ! -t 0 ]]; then
-        while IFS= read -r line; do
-            cprintf "${line}\n"
-        done
-        exit 0
-    fi
-    # Show help if no arguments or --help
-    while [[ $# -gt 0 ]]; do
-        key="$1"
-        case "$key" in
-            -h | --help)
-                cprintf::show-help
-                exit 0
-                ;;
-            --)
-                break
-                ;;
-            --*)
-                function_name="cprintf::opt::${key:2}"
-                if declare -f "$function_name" >/dev/null; then
-                    shift
-                    "$function_name" "$@"
-                    exit
-                fi
-                break
-                ;;
-            *)
-                break
-                ;;
-        esac
-        shift
+[[ "$0" != "${BASH_SOURCE[0]}" ]] && return
+
+if [[ $# -eq 0 && ! -t 0 ]]; then
+    while IFS= read -r line; do
+        cprintf "${line}\n"
     done
-    if [[ $# -eq 0 ]]; then
-        echo "cprintf - formatted output with colors and text effects"
-        echo "Usage: cprintf [options] format [arguments...]"
-        echo "'cprintf -h' for options."
-        echo "See 'man cprintf' for complete documentation"
-        exit 0
-    fi
-    cprintf "$@"
-    printf "%b[0m" "${ANSI_ESC}"
+    exit 0
 fi
+# Show help if no arguments or --help
+while [[ $# -gt 0 ]]; do
+    key="$1"
+    case "$key" in
+        -h | --help)
+            cprintf::show-help
+            exit 0
+            ;;
+        --)
+            break
+            ;;
+        --*)
+            function_name="cprintf::opt::${key:2}"
+            if declare -f "$function_name" >/dev/null; then
+                shift
+                "$function_name" "$@"
+                exit
+            fi
+            break
+            ;;
+        *)
+            break
+            ;;
+    esac
+    shift
+done
+if [[ $# -eq 0 ]]; then
+    echo "cprintf - formatted output with colors and text effects"
+    echo "Usage: cprintf [options] format [arguments...]"
+    echo "'cprintf -h' for options."
+    echo "See 'man cprintf' for complete documentation"
+    exit 0
+fi
+cprintf "$@"
+printf "%b[0m" "${ANSI_ESC}"
