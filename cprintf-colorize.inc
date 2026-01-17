@@ -243,7 +243,8 @@ function cprintf::add_color_effect() {
         elif [[ ${ansi_code} -lt 256 ]]; then
             color_space="EXTENDED"
         else
-            color_space="TRUE"
+            color_space="STANDARD"
+            ansi_code=${ANSI_COLOR_DEFAULT}
         fi
     fi
     [[ "${intensity}" -gt 0 ]] && [[ "${color_space}" == "STANDARD" ]] && {
