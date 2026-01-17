@@ -88,7 +88,7 @@ function cprintf::add_style() {
     local style_name="STYLE_SET_${STYLE_SET}_${1^^}"
     local -n style="${style_name}"
     cprintf::colorize "${style[0]}"
-    styles+=("${style[1]}")
+    STYLES+=("${style[1]}")
 }
 
 function cprintf::remove_style() {
@@ -318,7 +318,7 @@ function cprintf::print() {
         *)
         esac
     done
-    printf "%s" "${text}"
+    printf -- "%s" "${text}"
 }
 
 #-----------------------------------------------------------------------------------------------------------------------
