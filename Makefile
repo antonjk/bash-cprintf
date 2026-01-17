@@ -3,15 +3,27 @@ INSTALL_DIR = $(PREFIX)/share/cprintf
 BIN_DIR = $(PREFIX)/bin
 MAN_DIR = $(PREFIX)/share/man/man1
 
-.PHONY: install uninstall
+.PHONY: install uninstall init build clean
 
-install:
+init:
+	@if [ ! -f imgcat ]; then \
+		echo "Downloading imgcat..."; \
+		wget -q https://iterm2.com/utilities/imgcat || curl -sS https://iterm2.com/utilities/imgcat -o imgcat; \
+		chmod +x imgcat; \
+	fi
+
+clean:
+	./scripts/build-cprintf clean
+
+build: init
+	@echo "Building cprintf..."
 	./scripts/build-cprintf full
+
+install: build
 	mkdir -p $(INSTALL_DIR)
 	cp -r * $(INSTALL_DIR)/
 	chmod +x $(INSTALL_DIR)/cprintf
 	chmod +x $(INSTALL_DIR)/cprintf-full
-	chmod +x $(INSTALL_DIR)/mdterm
 	ln -sf $(INSTALL_DIR)/cprintf-full $(BIN_DIR)/cprintf
 	ln -sf $(INSTALL_DIR)/mdterm $(BIN_DIR)/mdterm
 	@if [ -f doc/cprintf.1 ]; then \

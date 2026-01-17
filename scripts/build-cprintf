@@ -96,7 +96,10 @@ done
 
 case "$build_type" in
     clean)
+        echo "Deleting build artifacts"
         rm -rf cprintf-{core,lib,full}
+        echo "Deleting imgcat"
+        rm -rf imgcat
         exit
         ;;
     core)

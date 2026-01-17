@@ -30,3 +30,6 @@ class Test {
 }
 
 ```
+## Images
+
+![Screenshot1](../images/Screenshot1.png)

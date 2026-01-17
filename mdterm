@@ -66,6 +66,7 @@ fi
 
 . "${SCRIPT_DIR}/cprintf"
 
+declare MD_BASE_DIR='.'
 #-----------------------------------------------------------------------------------------------------------------------
 # Render fenced code blocks with syntax highlighting.
 #
@@ -87,8 +88,49 @@ mdterm::bat() {
     if command -v bat &>/dev/null; then
         printf '\n'
         printf "%b" "$2" | bat -l "$1" ${BAT_ARGS}
+        printf '\n'
     else
         mdterm::printf "${MD_STYLE_CODE[0]}\n${2}${MD_STYLE_CODE[1]}"
+    fi
+}
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Render inline images using imgcat if available.
+#
+# Uses imgcat to display images in the terminal if available, otherwise displays alt text.
+# imgcat is available in iTerm2 and some other terminal emulators.
+#
+# Arguments:
+#   $1 - Alt text for the image
+#   $2 - Image URL or path
+#
+# Output:
+#   Image via imgcat or alt text to stdout
+#
+# Examples:
+#   mdterm::image "Screenshot" "images/screenshot.png"  → Displays image or [Screenshot]
+#-----------------------------------------------------------------------------------------------------------------------
+mdterm::image() {
+    local alt="$1"
+    local url="$2"
+
+    # Check if file exists
+    [[ ! -f "${MD_BASE_DIR}/$url" ]] && { printf "[%s]" "$alt"; return; }
+
+    # Kitty graphics protocol
+    if [[ "$TERM" == "xterm-kitty" ]] && command -v kitty &>/dev/null; then
+        printf '\n'
+        kitty +kitten icat "${MD_BASE_DIR}/$url" 2>/dev/null
+
+        printf '\n'
+        # iTerm2 inline images (imgcat)
+    elif command -v "${SCRIPT_DIR}/imgcat" &>/dev/null; then
+        printf '\n'
+        "${SCRIPT_DIR}/imgcat" "${MD_BASE_DIR}/$url"
+        printf '\n'
+        # Fallback to alt text
+    else
+        printf "[%s]" "$alt"
     fi
 }
 
@@ -174,15 +216,16 @@ mdterm::show-help() {
 #-----------------------------------------------------------------------------------------------------------------------
 # Process markdown inline formatting and convert to cprintf markup.
 #
-# Recursively processes markdown inline syntax (code, emphasis, underline) and converts to
-# corresponding cprintf style tags. Processes in order: code, ***, **, *, _ to handle nesting.
+# Recursively processes markdown inline syntax (code, emphasis, underline, images) and converts to
+# corresponding cprintf style tags. Processes in order: images, code, ***, **, *, _ to handle nesting.
 #
 # Processing Order:
-#   1. `code` - Inline code blocks
-#   2. ***text*** - Bold italic emphasis
-#   3. **text** - Bold emphasis
-#   4. *text* - Italic emphasis
-#   5. _text_ - Underline
+#   1. ![alt](url) - Images (displays alt text)
+#   2. `code` - Inline code blocks
+#   3. ***text*** - Bold italic emphasis
+#   4. **text** - Bold emphasis
+#   5. *text* - Italic emphasis
+#   6. _text_ - Underline
 #
 # Arguments:
 #   $1 - Text string with markdown inline syntax
@@ -195,8 +238,16 @@ mdterm::show-help() {
 #   mdterm::processFragment "**bold** text"           → "<@em2>bold</@> text"
 #   mdterm::processFragment "`code` block"            → "<@code>code</@> block"
 #   mdterm::processFragment "_*underline italic*_"    → "<u><@em1>underline italic</@></u>"
+#   mdterm::processFragment "![alt](url)"             → "[alt]"
 #-----------------------------------------------------------------------------------------------------------------------
 mdterm::processFragment() {
+    # Check for images first
+    local img_pattern='(.*)!\[([^]]+)\]\(([^)]+)\)(.*)'
+    if [[ "$1" =~ $img_pattern ]]; then
+        mdterm::processFragment "${BASH_REMATCH[1]}$(mdterm::image "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")${BASH_REMATCH[4]}"
+        return
+    fi
+
     local patterns=(
         '\`([^\`]+)\`' 'MD_STYLE_CODE'
         '\*{3}([^*]+)\*{3}' 'MD_STYLE_EM3'
@@ -367,7 +418,9 @@ done
 
 if [[ ${#FILES[@]} -gt 0 ]]; then
     for file in "${FILES[@]}"; do
+        MD_BASE_DIR="$(cd "$(dirname "${file}")" && pwd)"
         mdterm::render "$(cat "$file")"
+        MD_BASE_DIR='.'
     done
 else
     mdterm::render "$*"
