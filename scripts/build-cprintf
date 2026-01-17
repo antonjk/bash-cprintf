@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# Build cprintf with different include levels
+
+build_type="${1:-full}"
+output="cprintf-${build_type}"
+
+show_help() {
+    cat << 'EOF'
+NAME
+    build-cprintf - Build cprintf with different include levels
+
+SYNOPSIS
+    build-cprintf [BUILD_TYPE]
+
+DESCRIPTION
+    Builds cprintf executable with varying levels of functionality by
+    including different optional modules. Creates output files named
+    cprintf-BUILD_TYPE.
+
+BUILD TYPES
+    core
+        Minimal build with only core functionality:
+        - ANSI escape code handling
+        - Color aliases
+        - Colorization engine
+        Output: cprintf-core
+
+    lib
+        Library build with core + essential options:
+        - Core functionality
+        - Color support checking
+        Suitable for sourcing in scripts.
+        Output: cprintf-lib
+
+    full (default)
+        Complete build with all optional features:
+        - Core functionality
+        - All --opt-* modules (help, color codes, etc.)
+        Recommended for standalone use.
+        Output: cprintf-full
+
+    all
+        Build all variants (core, lib, full)
+
+    clean
+        Remove all built cprintf-* files
+
+EXAMPLES
+    Build full version:
+        ./scripts/build-cprintf full
+
+    Build minimal core:
+        ./scripts/build-cprintf core
+
+    Build all variants:
+        ./scripts/build-cprintf all
+
+    Clean build artifacts:
+        ./scripts/build-cprintf clean
+
+FILES
+    cprintf                 Source template
+    cprintf-*.inc          Include modules
+    cprintf-opt-*.inc      Optional feature modules
+
+SEE ALSO
+    cprintf(1)
+EOF
+}
+
+case "$build_type" in
+    -h|--help|help)
+        show_help
+        exit 0
+        ;;
+esac
+
+# Core includes
+CORE_INCLUDES=(
+    "cprintf-ansi.inc"
+    "cprintf-color-aliases.inc"
+    "cprintf-colorize.inc"
+)
+# Includes that are added to the core to make the lib
+LIB_INCLUDES=(
+    "cprintf-opt-check-color-support.inc"
+)
+
+# Includes that are added to the core to make the full
+OPT_INCLUDES=()
+
+OPT_PREFIX="cprintf-opt-"
+for file in "${OPT_PREFIX}"*.inc; do
+    OPT_INCLUDES+=("${file}")
+done
+
+case "$build_type" in
+    clean)
+        rm -rf cprintf-{core,lib,full}
+        exit
+        ;;
+    core)
+        includes=("${CORE_INCLUDES[@]}")
+        ;;
+    lib)
+        includes=("${CORE_INCLUDES[@]}" "${LIB_INCLUDES[@]}")
+        ;;
+    full)
+        includes=("${CORE_INCLUDES[@]}" "${OPT_INCLUDES[@]}")
+        ;;
+    all)
+        ./scripts/build-cprintf core &&
+        ./scripts/build-cprintf lib &&
+        ./scripts/build-cprintf full
+        exit
+        ;;
+    *)
+        echo "Usage: $0 {core|lib|full|all|clean}"
+        echo "Try '$0 --help' for more information."
+        exit 1
+        ;;
+esac
+
+function include_files() {
+    for inc in "${includes[@]}"; do
+        if [[ ! -f "${inc}" ]]; then
+            continue
+        fi
+        cat "$inc"
+        if [[ "${inc}" =~ ${OPT_PREFIX} ]]; then
+            filename="${inc##*/}"               # Get basename
+            opt_name="${filename#cprintf-opt-}" # Remove prefix
+            opt_name="${opt_name%.inc}"         # Remove .inc extension
+            header_text="$(grep '^#[?]' "$inc" 2>/dev/null | sed 's/^#\?//; s/^[[:space:]]*//' | head -1)"
+            OPT_HELP="${OPT_HELP}\n   --${opt_name}\n     ${header_text}\n"
+        fi
+    done
+    printf 'OPT_HELP="%s"\n' "${OPT_HELP}"
+}
+
+{
+    OPT_HELP=""
+    INCLUDE_START=0
+    while IFS= read -r line; do
+        if [[ "${line}" =~ "# INCLUDES - End" ]]; then
+            include_files
+            INCLUDE_START=0
+        fi
+        if [[ $INCLUDE_START -eq 0 ]]; then
+            printf '%s\n' "${line}"
+        fi
+        if [[ "${line}" =~ "# INCLUDES - Start" ]]; then
+            INCLUDE_START=1
+        fi
+    done <cprintf
+} >"${output}.tmp" && mv "${output}.tmp" "$output"
+chmod +x "$output"
+echo "Built: $output with ${#includes[@]} includes"
