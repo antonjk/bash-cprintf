@@ -1,4 +1,3 @@
-<meta name="google-site-verification" content="Agj3c9eNgP4xQz2tFpHOb9w3Tt8lbeOQmqoDTWvAE08" />
 # bash-cprintf
 
 Bash utilities for terminal colors and formatting:
