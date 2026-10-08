@@ -1,111 +1,65 @@
 # bash-cprintf
 
-Bash utilities for terminal colors and formatting:
-- **cprintf** - Printf-like functionality with XML-style markup for colors and text effects
-- **mdterm** - Markdown terminal renderer with syntax highlighting
+**cprintf** — printf-like formatting with XML-style markup for terminal colors and
+text effects. Nested tags, inline modifiers, 256-color and true color, multiple
+notation formats (decimal, hex, aliases). Works as a command or as a sourced
+library.
 
 ![Screenshot1](images/Screenshot1.png)
 
 ## Features
 
-### cprintf
-
 - Printf-compatible formatting with color markup
 - XML-style tags for colors and text effects
-- Supports nested tags and inline modifiers
+- Nested tags and inline modifiers
 - 256-color and true color support
-- Multiple color notation formats (decimal, hex, aliases)
-- Reads from stdin or command line arguments
-- Can be used as a library (sourced)
-
-### mdterm
-
-- Renders markdown with terminal colors
-- Supports headings (H1-H4), emphasis, code, underline
-- Fenced code blocks with syntax highlighting (via bat)
-- Multiple input modes: arguments, stdin, files
-- Configurable styling
+- Decimal, hex, and alias color notations
+- Reads from stdin or command-line arguments
+- Usable as a library (sourced)
 
 ## Installation
 
-### Quick Install
+### Homebrew (recommended)
 
 ```bash
-curl -sSL https://tinyurl.com/mbzv9ex9 | sudo bash
+brew install antonjk/tap/cprintf
 ```
 
-This installs both `cprintf` and `mdterm` to `/usr/local/bin/`.
-
-### Manual Install
-
-```bash
-wget https://github.com/antonjk/bash-cprintf/archive/refs/heads/main.zip
-unzip main.zip
-cd bash-cprintf-main
-sudo make install
-```
-
-Installs:
-- `/usr/local/bin/cprintf` - Main executable
-- `/usr/local/bin/mdterm` - Markdown renderer
-- `/usr/local/share/man/man1/cprintf.1` - Man page
-- `/usr/local/share/man/man1/mdterm.1` - Man page
-
-### From Source
+### From source
 
 ```bash
 git clone https://github.com/antonjk/bash-cprintf.git
 cd bash-cprintf
-chmod +x cprintf mdterm
+make install            # builds dist/cprintf-full and installs it as `cprintf`
 ```
+
+`make install` installs:
+- `$(PREFIX)/bin/cprintf` — the command (defaults to `PREFIX=/usr/local`)
+- `$(PREFIX)/share/man/man1/cprintf.1` — man page
 
 ## Usage
 
-### cprintf
-
 ```bash
 # Basic usage
-./cprintf "<fg:red>Error:</fg> <b>%s</b>\n" "File not found"
+cprintf "<fg:red>Error:</fg> <b>%s</b>\n" "File not found"
 
 # Pipe input
-echo "<fg:blue>Hello World</fg>" | ./cprintf
+echo "<fg:blue>Hello World</fg>" | cprintf
 
 # Nested tags
-./cprintf "<fg:red><b>Bold Red</b></fg>\n"
+cprintf "<fg:red><b>Bold Red</b></fg>\n"
 
-# Use as library
-source ./cprintf
+# Use as a library
+source "$(command -v cprintf)"
 cprintf "<fg:green>Success:</fg> %s\n" "Operation completed"
 
-# Check color support
-./cprintf --check-color-support
-
-# View all supported tags
-./cprintf --supported-tags
-
-# Color code reference
-./cprintf --color-codes
+# Check color support / references
+cprintf --check-color-support
+cprintf --supported-tags
+cprintf --color-codes
 ```
 
-### mdterm
-
-```bash
-# Render markdown from arguments
-./mdterm "# Title\nSome **bold** and *italic* text"
-
-# Render from stdin
-echo "# Hello World" | ./mdterm
-cat README.md | ./mdterm
-
-# Render from file(s)
-./mdterm -f document.md
-./mdterm -f file1.md file2.md file3.md
-
-# Custom bat theme for code blocks
-./mdterm --bat-args "--theme=Dracula --style=numbers" -f code.md
-```
-
-## cprintf Tags and Features
+## Tags and Features
 
 ### Supported Tags
 
@@ -122,94 +76,47 @@ cat README.md | ./mdterm
 
 ### Color Notation
 
-**Decimal:**
-- `0-7` - Standard colors
-- `8-15` - High intensity colors
-- `16-255` - 8-bit extended colors
-- `256+` - 24-bit true colors
+**Decimal:** `0-7` standard, `8-15` high intensity, `16-255` 8-bit, `256+` true color.
 
-**Hex:**
-- `#0-#7` - Standard colors
-- `#8-#F` - High intensity colors
-- `#00-#FF` - 8-bit extended colors
-- `#RRGGBB` - 24-bit true colors
+**Hex:** `#0-#7` standard, `#8-#F` high intensity, `#00-#FF` 8-bit, `#RRGGBB` true color.
 
-**Aliases:**
-- Lowercase: `red`, `green`, `blue`, etc. (standard)
-- Capitalized: `Red`, `Green`, `Blue`, etc. (high intensity)
+**Aliases:** lowercase `red`/`green`/`blue`… (standard); capitalized `Red`/`Green`…
+(high intensity).
 
 ### Color Modifiers
 
-- `!` - Bold effect
-- `*` - Italic effect
-- `_` - Underline effect
-- `=` - Strikethrough effect
-- `~` - Invert effect
-- `+` - High intensity
-- `-` - Low intensity
-
-Example: `<fg:red!*_>Bold italic underlined red</fg>`
-
-## mdterm Markdown Support
-
-### Supported Syntax
-
-- `# Heading 1` - H1 style (cyan+)
-- `## Heading 2` - H2 style (yellow+)
-- `### Heading 3` - H3 style (magenta)
-- `#### Heading 4` - H4 style (white+)
-- `*italic*` - Italic text
-- `**bold**` - Bold text
-- `***bold italic***` - Bold + italic
-- `` `code` `` - Inline code (green on black)
-- `_underline_` - Underlined text
-- ` ```lang ` - Fenced code blocks (syntax highlighted with bat)
-
-### Style Combinations
-
-Styles can be nested:
-- `_*italic underline*_`
-- `_**bold underline**_`
-
-## Documentation
-
-View man pages:
-```bash
-man cprintf
-man mdterm
-```
-
-Online help:
-```bash
-cprintf --help
-mdterm --help
-```
+`!` bold, `*` italic, `_` underline, `=` strikethrough, `~` invert, `+` high
+intensity, `-` low intensity. Combine them, e.g.
+`<fg:red!*_>Bold italic underlined red</fg>`.
 
 ## Build System
 
-The project includes a build script for creating different cprintf variants:
+```bash
+./scripts/build-cprintf full     # all optional CLI modules (default) -> dist/cprintf-full
+./scripts/build-cprintf lib      # core + color-support, for sourcing -> dist/cprintf-lib
+./scripts/build-cprintf core     # minimal core                       -> dist/cprintf-core
+./scripts/build-cprintf all      # all variants
+./scripts/build-cprintf clean
+```
+
+## Examples
+
+The [`examples/`](examples/) directory contains demos, including **mdterm**, a small
+markdown terminal renderer built on cprintf (it uses the vendored `examples/imgcat`
+for inline images). These are illustrations of cprintf in use, not part of the
+installed tool.
+
+## Documentation
 
 ```bash
-# Build full version (default)
-./scripts/build-cprintf full
-
-# Build minimal core
-./scripts/build-cprintf core
-
-# Build library version
-./scripts/build-cprintf lib
-
-# Build all variants
-./scripts/build-cprintf all
-
-# Show help
-./scripts/build-cprintf --help
+man cprintf
+cprintf --help
 ```
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License — see `LICENSE`.

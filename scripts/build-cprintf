@@ -2,7 +2,8 @@
 # Build cprintf with different include levels
 
 build_type="${1:-full}"
-output="cprintf-${build_type}"
+build_path="dist"
+output="$build_path/cprintf-${build_type}"
 
 show_help() {
     cat << 'EOF'
@@ -97,10 +98,7 @@ done
 case "$build_type" in
     clean)
         echo "Deleting build artifacts"
-        rm -rf cprintf-{core,lib,full}
-        echo "Deleting imgcat"
-        rm -rf imgcat
-        exit
+        rm -rf $build_path
         ;;
     core)
         includes=("${CORE_INCLUDES[@]}")
@@ -140,7 +138,7 @@ function include_files() {
     done
     printf 'OPT_HELP="%s"\n' "${OPT_HELP}"
 }
-
+mkdir -p "$build_path"
 {
     OPT_HELP=""
     INCLUDE_START=0
